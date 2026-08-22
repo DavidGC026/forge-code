@@ -62,6 +62,7 @@ import {
   setSafeMode,
   onSafeModeChanged,
   SafeModeError,
+  configureExtensionRemoteFileSystem,
 } from './extensions';
 import { RpcError } from './extensions/domain/rpc-protocol';
 import {
@@ -2218,6 +2219,85 @@ ipcMain.handle('forge:hasHistory', async (_event, workspacePath: string) => {
   } catch {
     return false;
   }
+});
+
+// `workspace.fs` over SSH. The extension subsystem owns the policy; this is
+// only the transport, expressed with the same helpers the workbench already
+// uses for remote workspaces. Every path is shell-quoted: it comes from an
+// extension, and building a remote command out of it is the one place where
+// a crafted path would become code.
+configureExtensionRemoteFileSystem({
+  isRemote: (target) => isRemoteWorkspacePath(target),
+  stat: async (target) => {
+    const remote = parseRemoteWorkspaceUri(target);
+    // `%f` is the type (regular file / directory), `%s` size, `%Y` mtime.
+    const out = await runSshCommand(
+      remote.target,
+      `stat -c '%F|%s|%Y' ${shellQuote(remote.path)}`,
+    );
+    const [kind, size, mtime] = out.toString('utf8').trim().split('|');
+    const isDirectory = kind === 'directory';
+    return {
+      type: isDirectory ? 2 : 1,
+      ctime: Number(mtime) * 1000,
+      mtime: Number(mtime) * 1000,
+      size: Number(size) || 0,
+    };
+  },
+  readFile: async (target) => {
+    const remote = parseRemoteWorkspaceUri(target);
+    const out = await runSshCommand(remote.target, `cat ${shellQuote(remote.path)}`);
+    return new Uint8Array(out);
+  },
+  writeFile: async (target, data) => {
+    const remote = parseRemoteWorkspaceUri(target);
+    await runSshCommand(
+      remote.target,
+      `cat > ${shellQuote(remote.path)}`,
+      Buffer.from(data),
+    );
+  },
+  readDirectory: async (target) => {
+    const remote = parseRemoteWorkspaceUri(target);
+    // A trailing `/` on the name marks directories, which is cheaper and
+    // more portable than a second stat per entry.
+    const out = await runSshCommand(
+      remote.target,
+      `ls -Ap ${shellQuote(remote.path)}`,
+    );
+    return out.toString('utf8').split('\n').filter(Boolean).map((name) => (
+      name.endsWith('/')
+        ? { name: name.slice(0, -1), type: 2 }
+        : { name, type: 1 }
+    ));
+  },
+  createDirectory: async (target) => {
+    const remote = parseRemoteWorkspaceUri(target);
+    await runSshCommand(remote.target, `mkdir -p ${shellQuote(remote.path)}`);
+  },
+  delete: async (target, options) => {
+    const remote = parseRemoteWorkspaceUri(target);
+    await runSshCommand(
+      remote.target,
+      `rm ${options.recursive ? '-rf' : '-f'} -- ${shellQuote(remote.path)}`,
+    );
+  },
+  rename: async (source, destination) => {
+    const from = parseRemoteWorkspaceUri(source);
+    const to = parseRemoteWorkspaceUri(destination);
+    await runSshCommand(
+      from.target,
+      `mv -- ${shellQuote(from.path)} ${shellQuote(to.path)}`,
+    );
+  },
+  copy: async (source, destination) => {
+    const from = parseRemoteWorkspaceUri(source);
+    const to = parseRemoteWorkspaceUri(destination);
+    await runSshCommand(
+      from.target,
+      `cp -r -- ${shellQuote(from.path)} ${shellQuote(to.path)}`,
+    );
+  },
 });
 
 // ── App Lifecycle ─────────────────────────────────────────────────────────

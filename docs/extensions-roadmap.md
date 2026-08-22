@@ -214,6 +214,14 @@ Criterios de salida:
 
 Objetivo: soportar extensiones de productividad y edición.
 
+Estado: **en progreso**. Incremento 4.0 completó `Uri`, workspace folders y
+`workspace.fs` con política de rutas propia (workspace, directorio de la
+extensión en sólo lectura y storage), autorizada sobre el realpath y con el
+filesystem como puerto: local por Node y remoto por un puente SSH. Diseño y
+plan de incrementos 4.0–4.6:
+[extensions-phase4-design.md](./extensions-phase4-design.md) · progreso:
+[extensions-phase4-progress.md](./extensions-phase4-progress.md)
+
 Trabajo:
 
 - `Uri`, workspace folders y `workspace.fs`.
@@ -348,11 +356,10 @@ El Milestone 3 está cerrado: los siete incrementos (3.0–3.6) están hechos y
 el gate de seguridad queda cubierto salvo la integración con un
 `utilityProcess` real, que este entorno no puede ejecutar sin display.
 
-El próximo cambio de código es el **Milestone 4**: workspace, documentos y
-edición (`workspace.fs`, `TextDocument`, `TextEditor`, eventos de cambio y
-`onDidSaveTextDocument`). El seam está listo: la facade por extensión ya
-acepta miembros implementados que sombrean el default que lanza, y
-`workspace` es hoy el namespace con más `UnsupportedApiError` reportados.
+El próximo cambio de código es el **incremento 4.1**: espejo de documentos en
+main y `workspace.textDocuments` con sus eventos. Es lo que hace verdadera la
+regla del diseño de fase 4: un documento abierto se lee del buffer del
+usuario, nunca del disco.
 
 Diseño: [extensions-phase3-design.md](./extensions-phase3-design.md).
 Progreso del kernel: [extensions-phase3-progress.md](./extensions-phase3-progress.md).

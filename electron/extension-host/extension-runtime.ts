@@ -30,6 +30,8 @@ import type { EntryPointResolverDeps, ModuleSystemLike } from './module-loader';
 import { createExtensionContext, disposeSubscriptions } from './extension-context';
 import type { ExtensionContext, MementoStore } from './extension-context';
 import { createVscodeApi } from './vscode-api/facade';
+import { createFileSystemApi } from './vscode-api/workspace-fs';
+import { Uri } from './vscode-api/primitives';
 import { HostCommandRegistry } from './host-commands';
 import type { CommandBridge } from './host-commands';
 
@@ -400,7 +402,48 @@ export class ExtensionRuntime {
    */
   private workspaceApiFor(extensionId: string): Record<string, unknown> {
     const snapshot = () => this.options.configuration?.() ?? {};
+    const workspacePath = this.options.workspacePath;
+    const folderUri = workspacePath ? Uri.file(workspacePath) : null;
+    const folders = folderUri
+      ? [{ uri: folderUri, name: basenameOf(workspacePath as string), index: 0 }]
+      : undefined;
+
     return {
+      fs: createFileSystemApi((operation, payload) => {
+        if (!this.options.request) {
+          this.options.reportUnsupportedApi(`workspace.fs.${operation}`, extensionId);
+          throw new RpcError(
+            'UNSUPPORTED_API',
+            'El host no puede acceder al sistema de archivos sin conexión con Forge.',
+          );
+        }
+        return this.options.request(`workspace.fs.${operation}`, payload, extensionId);
+      }),
+
+      // A single folder: Forge opens one at a time. Reporting an array of
+      // one (instead of pretending multi-root works) is what keeps an
+      // extension iterating over folders correct today and correct later.
+      workspaceFolders: folders,
+      name: workspacePath ? basenameOf(workspacePath) : undefined,
+      workspaceFile: undefined,
+
+      getWorkspaceFolder: (uri: { fsPath?: string } | string) => {
+        if (!folders || !folderUri) return undefined;
+        const target = typeof uri === 'string' ? uri : uri?.fsPath ?? '';
+        return target && isInsidePath(workspacePath as string, target) ? folders[0] : undefined;
+      },
+
+      asRelativePath: (
+        pathOrUri: { fsPath?: string } | string,
+        includeWorkspaceFolder?: boolean,
+      ) => {
+        const target = typeof pathOrUri === 'string' ? pathOrUri : pathOrUri?.fsPath ?? '';
+        if (!workspacePath || !isInsidePath(workspacePath, target)) return target;
+        const relative = target.slice(workspacePath.length).replace(/^[\\/]+/, '');
+        return includeWorkspaceFolder
+          ? `${basenameOf(workspacePath)}/${relative}`
+          : relative;
+      },
       getConfiguration: (section?: string) => {
         const prefix = section ? `${section}.` : '';
         const resolve = (key: string): unknown => snapshot()[`${prefix}${key}`];
@@ -426,9 +469,6 @@ export class ExtensionRuntime {
           },
         };
       },
-      get workspaceFolders() {
-        return undefined;
-      },
     };
   }
 
@@ -447,4 +487,21 @@ export class ExtensionRuntime {
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
+}
+
+/** Last segment of a path, without pulling `path` into this module: the
+ *  host may be reasoning about a remote URI, where the platform separator
+ *  is not the right question. */
+function basenameOf(target: string): string {
+  const cleaned = target.replace(/[\\/]+$/, '');
+  const index = Math.max(cleaned.lastIndexOf('/'), cleaned.lastIndexOf('\\'));
+  return index === -1 ? cleaned : cleaned.slice(index + 1);
+}
+
+/** String containment with a separator boundary, mirroring the policy main
+ *  applies (`domain/file-access.ts`). */
+function isInsidePath(parent: string, target: string): boolean {
+  const base = parent.replace(/\\/g, '/').replace(/\/+$/, '');
+  const candidate = target.replace(/\\/g, '/');
+  return candidate === base || candidate.startsWith(`${base}/`);
 }

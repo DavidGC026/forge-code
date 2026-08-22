@@ -14,6 +14,7 @@ resultados que el modelo de fallos del diseño §6 distingue:
 | `commanding` | `commands.registerCommand`, comando que lanza y comando sin `dispose` |
 | `messaging` | `window.showInformationMessage` y `workspace.getConfiguration` |
 | `helloworld` | el ejemplo oficial de VS Code, sin adaptar: criterio de salida del Milestone 3 |
+| `filesystem` | `workspace.fs`, workspace folders y la política de rutas (Milestone 4.0) |
 
 ## Fixtures maliciosas de runtime (gate de seguridad §9)
 

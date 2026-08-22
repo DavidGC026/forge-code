@@ -204,6 +204,13 @@ líneas): `electron/main.ts`, `ExplorerPanel.tsx`, `EditorArea.tsx`,
   falló) en la vista de detalle, y los comandos de la paleta. Con esto los
   siete incrementos 3.0–3.6 están cerrados.
   Ver [extensions-phase3-progress.md](./extensions-phase3-progress.md).
+- **Extensiones Milestone 4.0**: `workspace.fs` con política de rutas propia
+  —workspace, directorio de la extensión (sólo lectura) y su storage—
+  aplicada sobre el realpath y con ambos extremos autorizados en `rename` y
+  `copy`. El filesystem es un puerto: local por Node y remoto por un puente
+  SSH que main inyecta, con `FileSystemError` tipado de punta a punta.
+  Ver [extensions-phase4-progress.md](./extensions-phase4-progress.md) y el
+  [diseño del milestone](./extensions-phase4-design.md).
 
 Actualmente `store.ts` ha delegado Layout, Terminal, Git, Remote y Extensiones a
 slices específicos. Siguen inline: workspace, tabs, editor, IA, Live Server,

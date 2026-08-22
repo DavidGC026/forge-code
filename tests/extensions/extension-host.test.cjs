@@ -624,6 +624,7 @@ const {
 const {
   ExtensionActivationService,
 } = require('../../dist-electron/extensions/application/extension-activation-service.js');
+const { RpcError } = require('../../dist-electron/extensions/domain/rpc-protocol.js');
 
 test('a fixture command registers through the broker and runs from main', async () => {
   const descriptor = hostDescriptor('commanding');
@@ -997,4 +998,79 @@ test('an extension cannot hijack a command id another one owns', async () => {
     args: ['Forge'],
   });
   assert.equal(answer.result, 'hola, Forge');
+});
+
+// ── workspace.fs de punta a punta (incremento 4.0) ──────────────────────
+
+test('a fixture reads and writes inside the workspace, and is refused outside', async (t) => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'forge-ws-'));
+  t.after(() => fs.rmSync(workspace, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(workspace, 'existente.txt'), 'ya estaba');
+
+  const descriptor = hostDescriptor('filesystem');
+  const timers = createFakeTimers();
+  const launcher = createFakeLauncher(timers);
+  const {
+    ExtensionFileSystem,
+    ExtensionFileSystemError,
+  } = require('../../dist-electron/extensions/application/extension-file-system.js');
+  const {
+    NodeExtensionFileSystem,
+  } = require('../../dist-electron/extensions/infrastructure/node-extension-file-system.js');
+
+  const fileSystem = new ExtensionFileSystem({
+    fs: new NodeExtensionFileSystem(),
+    scopesFor: () => ({
+      workspace,
+      extensionDir: descriptor.dir,
+      storagePaths: [descriptor.globalStoragePath],
+    }),
+  });
+
+  const host = new UtilityProcessExtensionHost({
+    launcher,
+    timers,
+    initialize: () => ({
+      apiVersion: '1.90.0',
+      extensions: [descriptor],
+      workspace,
+      trust: true,
+      configuration: {},
+    }),
+    onRequest: async (envelope) => {
+      assert.equal(ExtensionFileSystem.owns(envelope.method), true);
+      try {
+        return await fileSystem.handle(
+          envelope.extensionId,
+          ExtensionFileSystem.operationOf(envelope.method),
+          envelope.payload,
+        );
+      } catch (err) {
+        if (err instanceof ExtensionFileSystemError) {
+          throw new RpcError('INVALID_PAYLOAD', err.message, { code: err.code });
+        }
+        throw err;
+      }
+    },
+    warn: () => {},
+  });
+
+  await host.start();
+  const answer = await host.request('lifecycle.activate', { id: descriptor.id }, {
+    extensionId: descriptor.id,
+  });
+
+  assert.equal(answer.status, 'active');
+  // The fixture returned what it saw; `exports` only carries the keys, so
+  // the effects are asserted on disk and through a second read.
+  assert.equal(
+    fs.readFileSync(path.join(workspace, 'generado.txt'), 'utf8'),
+    'hola disco',
+    'the write landed in the workspace',
+  );
+  assert.deepEqual(answer.exports.sort(), [
+    'content', 'escaped', 'inWorkspace', 'names', 'relative', 'size',
+  ]);
+
+  await host.stop();
 });

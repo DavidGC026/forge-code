@@ -73,6 +73,14 @@ import { ForgeSafeModeStore } from './extensions/infrastructure/forge-safe-mode-
 import type { SafeModeStatus } from './extensions/domain/safe-mode';
 import { RpcError } from './extensions/domain/rpc-protocol';
 import {
+  ExtensionFileSystem,
+  ExtensionFileSystemError,
+} from './extensions/application/extension-file-system';
+import {
+  NodeExtensionFileSystem,
+  type RemoteFileSystemBridge,
+} from './extensions/infrastructure/node-extension-file-system';
+import {
   WorkspaceTrustService,
   WorkspaceTrustError,
 } from './extensions/application/workspace-trust-service';
@@ -689,13 +697,32 @@ const extensionHost = new UtilityProcessExtensionHost({
   // falls through to the broker's `UNSUPPORTED_API`, which is what feeds the
   // compatibility report with real usage.
   onRequest: async (envelope) => {
-    if (envelope.method !== 'window.showMessage') {
-      throw new RpcError(
-        'UNSUPPORTED_API',
-        `"${envelope.method}" no está soportado por Forge todavía.`,
-      );
+    if (envelope.method === 'window.showMessage') {
+      return showExtensionMessage(envelope.payload, envelope.extensionId ?? null);
     }
-    return showExtensionMessage(envelope.payload, envelope.extensionId ?? null);
+    if (ExtensionFileSystem.owns(envelope.method)) {
+      if (!envelope.extensionId) {
+        throw new RpcError('INVALID_PAYLOAD', 'La operación de archivo no declara su extensión.');
+      }
+      try {
+        return await extensionFileSystem.handle(
+          envelope.extensionId,
+          ExtensionFileSystem.operationOf(envelope.method),
+          envelope.payload,
+        );
+      } catch (err) {
+        // The `FileSystemError` code travels as data so the host can rebuild
+        // the class the extension catches on.
+        if (err instanceof ExtensionFileSystemError) {
+          throw new RpcError('INVALID_PAYLOAD', err.message, { code: err.code });
+        }
+        throw err;
+      }
+    }
+    throw new RpcError(
+      'UNSUPPORTED_API',
+      `"${envelope.method}" no está soportado por Forge todavía.`,
+    );
   },
 });
 
@@ -708,6 +735,46 @@ function effectiveConfigurationSnapshot(): Record<string, unknown> {
   }
   return snapshot;
 }
+
+// ── workspace.fs ────────────────────────────────────────────────────────
+//
+// The policy (what an extension may touch) is main's, and it is applied on
+// the real path. The filesystem itself is a port, so a remote workspace
+// goes through the same abstraction as the workbench: main injects the SSH
+// bridge, and without one a remote URI fails typed instead of silently
+// resolving against the local disk.
+
+let remoteFileSystemBridge: RemoteFileSystemBridge | null = null;
+
+/** Wires SSH support for `workspace.fs`; called once from main. */
+export function configureExtensionRemoteFileSystem(bridge: RemoteFileSystemBridge | null): void {
+  remoteFileSystemBridge = bridge;
+}
+
+const extensionFileSystem = new ExtensionFileSystem({
+  fs: new NodeExtensionFileSystem({
+    get remote() {
+      return remoteFileSystemBridge;
+    },
+  }),
+  scopesFor: (extensionId) => {
+    const entry = extensionRegistry.get(extensionId);
+    const descriptor = entry ? toHostDescriptor(entry) : null;
+    return {
+      workspace: workspaceProvider(),
+      extensionDir: entry?.dir ?? '',
+      storagePaths: descriptor
+        ? [descriptor.globalStoragePath, descriptor.workspaceStoragePath]
+        : [],
+    };
+  },
+  onRefused: (extensionId, target, message) => {
+    // A refusal is data for the compatibility report, not just a log line:
+    // it is how we learn whether the policy is too strict for real
+    // extensions instead of guessing.
+    console.warn(`[forge:ext-host] "${extensionId}" rechazada sobre "${target}": ${message}`);
+  },
+});
 
 // ── window.showMessage ──────────────────────────────────────────────────
 // The host asks, the renderer shows, the user (maybe) picks. Main holds the
