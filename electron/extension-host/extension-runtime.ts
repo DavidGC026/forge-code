@@ -33,6 +33,8 @@ import { createVscodeApi } from './vscode-api/facade';
 import { createFileSystemApi } from './vscode-api/workspace-fs';
 import { Uri } from './vscode-api/primitives';
 import { DocumentRegistry } from './document-registry';
+import { EditorRegistry } from './editor-registry';
+import type { EditorState } from './editor-registry';
 import type { TextDocumentState } from './vscode-api/text-document';
 import { HostCommandRegistry } from './host-commands';
 import type { CommandBridge } from './host-commands';
@@ -74,6 +76,8 @@ export interface ExtensionRuntimeOptions {
   configuration?: () => Record<string, unknown>;
   /** Documents open in the workbench when this generation started. */
   documents?: TextDocumentState[];
+  /** Editors open then, and which one had focus. */
+  editors?: { editors: EditorState[]; activeUri: string | null };
 }
 
 interface LoadedExtension {
@@ -95,6 +99,7 @@ export class ExtensionRuntime {
   /** Shared: a document is the same object for every extension, exactly as
    *  it is the same file. */
   readonly documents: DocumentRegistry;
+  readonly editors: EditorRegistry;
   private uninstallHook: (() => void) | null = null;
 
   constructor(options: ExtensionRuntimeOptions) {
@@ -112,6 +117,10 @@ export class ExtensionRuntime {
       return answer?.saved === true;
     });
     if (options.documents?.length) this.documents.reset(options.documents);
+    this.editors = new EditorRegistry(this.documents);
+    if (options.editors) {
+      this.editors.sync(options.editors.editors, options.editors.activeUri);
+    }
   }
 
   /** Runs a command registered by an extension. This is the main → host
@@ -311,6 +320,7 @@ export class ExtensionRuntime {
     }
     this.uninstallHook?.();
     this.uninstallHook = null;
+    this.editors.dispose();
     this.documents.dispose();
   }
 
@@ -402,10 +412,54 @@ export class ExtensionRuntime {
         return typeof selected === 'string' ? selected : undefined;
       };
 
+    const editors = this.editors;
     return {
       showInformationMessage: show('info'),
       showWarningMessage: show('warn'),
       showErrorMessage: show('error'),
+
+      // Editors are workbench state: shared objects, per-extension
+      // subscriptions.
+      get activeTextEditor() {
+        return editors.activeTextEditor;
+      },
+      get visibleTextEditors() {
+        return editors.visibleTextEditors;
+      },
+      onDidChangeActiveTextEditor: editors.onDidChangeActiveTextEditor,
+      onDidChangeTextEditorSelection: editors.onDidChangeTextEditorSelection,
+      onDidChangeVisibleTextEditors: editors.onDidChangeVisibleTextEditors,
+
+      showTextDocument: async (
+        target: { fsPath?: string; uri?: { fsPath?: string } } | string,
+        options?: { preserveFocus?: boolean; viewColumn?: number; selection?: unknown },
+      ) => {
+        const uri = typeof target === 'string'
+          ? target
+          : target?.uri?.fsPath ?? target?.fsPath ?? '';
+        if (!uri) {
+          throw new RpcError('INVALID_PAYLOAD', 'showTextDocument requiere un documento.');
+        }
+        if (!this.options.request) {
+          this.options.reportUnsupportedApi('window.showTextDocument', extensionId);
+          throw new RpcError(
+            'UNSUPPORTED_API',
+            'El host no puede mostrar documentos sin conexión con Forge.',
+          );
+        }
+        await this.options.request('editors.show', {
+          uri,
+          // Honoured by the renderer: an extension showing a document in the
+          // background must not steal the user's caret.
+          preserveFocus: options?.preserveFocus === true,
+        }, extensionId);
+
+        // The editor exists once the renderer answered and its sync arrived;
+        // returning the known one keeps `showTextDocument` usable as the
+        // `TextEditor` factory extensions treat it as.
+        return editors.visibleTextEditors.find((editor) => editor.document.fileName === uri)
+          ?? editors.activeTextEditor;
+      },
     };
   }
 

@@ -26,7 +26,13 @@ import {
 import type { editor } from 'monaco-editor';
 import logoUrl from '../assets/dvg-logo.jpg';
 import { lspClient, getLspLanguageId } from '../lsp/client';
-import { documentSyncService, attachMonaco as attachExtensionMonaco, isThemeAvailable } from '../extensions/registry';
+import {
+  documentSyncService,
+  editorSyncService,
+  attachMonaco as attachExtensionMonaco,
+  isThemeAvailable,
+} from '../extensions/registry';
+import { buildEditorLayout } from '../extensions/documentSync';
 import ImageViewer from './ImageViewer';
 import GitDiffEditor from './GitDiffEditor';
 import ExtensionDetailView from './ExtensionDetailView';
@@ -784,12 +790,38 @@ function MonacoWrapper() {
   const registerFormatActiveDocument = useStore((s) => s.registerFormatActiveDocument);
   const pendingEditorReveal = useStore((s) => s.pendingEditorReveal);
   const clearPendingEditorReveal = useStore((s) => s.clearPendingEditorReveal);
+  const openFilePath = useStore((s) => s.openFilePath);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 
   // Track which tab paths we've sent textDocument/didOpen for, so we
   // can fire didOpen exactly once per tab and didClose when the tab
   // disappears.
   const openedTabPathsRef = useRef<Set<string>>(new Set());
+
+  // Caret per file, for `window.activeTextEditor`. A ref, not state: it
+  // changes on every keystroke and nothing in React needs to re-render.
+  const selectionsRef = useRef<Record<string, {
+    anchorLine: number;
+    anchorCharacter: number;
+    activeLine: number;
+    activeCharacter: number;
+  }[]>>({});
+  const openTabsRef = useRef(openTabs);
+  openTabsRef.current = openTabs;
+  const activeTabIdRef = useRef(activeTabId);
+  activeTabIdRef.current = activeTabId;
+
+  /** Publishes the editor layout to the Extension Host. Dedup happens in
+   *  the service, so calling it liberally is fine. */
+  const publishEditorLayout = useCallback(() => {
+    const tabs = openTabsRef.current.filter(
+      (tab) => !tab.imageDataUrl && !tab.extension && !tab.gitDiff && tab.path,
+    );
+    const active = tabs.find((tab) => tab.id === activeTabIdRef.current);
+    editorSyncService.publish(
+      buildEditorLayout(tabs, active?.path ?? null, selectionsRef.current),
+    );
+  }, []);
 
   const activeTab = openTabs.find((t) => t.id === activeTabId);
   const activeTabRef = useRef(activeTab);
@@ -912,6 +944,17 @@ function MonacoWrapper() {
     editor.onDidChangeCursorSelection((e) => {
       const tab = activeTabRef.current;
       const model = editor.getModel();
+      // Extensions read the caret too. Monaco is 1-based and the VS Code API
+      // is 0-based; converting here keeps that off every consumer.
+      if (tab?.path) {
+        selectionsRef.current[tab.path] = editor.getSelections()?.map((sel) => ({
+          anchorLine: sel.selectionStartLineNumber - 1,
+          anchorCharacter: sel.selectionStartColumn - 1,
+          activeLine: sel.positionLineNumber - 1,
+          activeCharacter: sel.positionColumn - 1,
+        })) ?? [];
+        publishEditorLayout();
+      }
       if (!tab || tab.imageDataUrl || !model) {
         window.electronAPI?.claudeIde?.updateSelection(null);
         return;
@@ -1039,6 +1082,9 @@ function MonacoWrapper() {
       }
     }
 
+    // The editor layout follows the same set of tabs.
+    publishEditorLayout();
+
     // The Extension Host mirrors every text buffer, not just the ones a
     // language server understands: an extension may care about any file.
     // One reconciliation call covers both new and closed tabs.
@@ -1052,7 +1098,38 @@ function MonacoWrapper() {
           isUnsaved: tab.isUnsaved,
         })),
     );
-  }, [openTabs]);
+  }, [openTabs, publishEditorLayout]);
+
+  // Focus moving between tabs is an `onDidChangeActiveTextEditor` for every
+  // extension listening.
+  useEffect(() => {
+    publishEditorLayout();
+  }, [activeTabId, publishEditorLayout]);
+
+  // `window.showTextDocument`: main relays the request and waits for the
+  // answer, so the extension's promise resolves when the tab really exists.
+  useEffect(() => {
+    const api = window.electronAPI?.ext;
+    if (!api?.onShowDocument) return;
+    const subscription = api.onShowDocument((request) => {
+      void (async () => {
+        let shown = false;
+        try {
+          // `preserveFocus` decides whether the tab comes to the front: an
+          // extension revealing a document in the background must not steal
+          // the user's caret.
+          const result = await openFilePath(request.uri, {
+            makeFrontmost: !request.preserveFocus,
+          });
+          shown = result.success;
+        } catch {
+          shown = false;
+        }
+        api.respondShowDocument?.(request.id, shown);
+      })();
+    });
+    return () => subscription.dispose();
+  }, [openFilePath]);
 
   if (!activeTab) return <WorkspaceHome />;
 

@@ -229,6 +229,7 @@ export class UtilityProcessExtensionHost implements ExtensionHost {
       trust: false,
       configuration: {},
       documents: [],
+      editors: { editors: [], activeUri: null },
     };
   }
 

@@ -54,6 +54,7 @@ export interface RuntimeFactoryInput {
   apiVersion: string;
   workspacePath: string | null;
   documents: NonNullable<ExtensionRuntimeOptions['documents']>;
+  editors: NonNullable<ExtensionRuntimeOptions['editors']>;
   log: ExtensionRuntimeOptions['log'];
   reportUnsupportedApi: ExtensionRuntimeOptions['reportUnsupportedApi'];
   commandBridge: CommandBridge;
@@ -89,6 +90,7 @@ function createDefaultRuntime(input: RuntimeFactoryInput): ExtensionRuntime {
       },
     },
     documents: input.documents,
+    editors: input.editors,
     // Storage paths travel in each descriptor, decided and sanitised by main.
     mementoStore: createFsMementoStore(),
     joinPath: (...segments) => path.join(...segments),
@@ -247,7 +249,8 @@ export function createBootstrapResponder(options: BootstrapResponderOptions): Re
         case 'lifecycle.initialize': {
           const payload = message.payload as
             | { protocol?: unknown; apiVersion?: unknown; extensions?: unknown;
-                workspace?: unknown; configuration?: unknown; documents?: unknown }
+                workspace?: unknown; configuration?: unknown; documents?: unknown;
+                editors?: unknown }
             | null;
           if (!payload || typeof payload !== 'object'
             || payload.protocol !== RPC_PROTOCOL_VERSION) {
@@ -292,6 +295,14 @@ export function createBootstrapResponder(options: BootstrapResponderOptions): Re
             request: (method, payload, extensionId) => hostRequest(method, payload, extensionId),
             configuration: () => configuration,
             documents,
+            editors: {
+              editors: Array.isArray((payload as { editors?: { editors?: unknown } }).editors?.editors)
+                ? ((payload as { editors: { editors: unknown[] } }).editors.editors).filter(isEditorState)
+                : [],
+              activeUri: typeof (payload as { editors?: { activeUri?: unknown } }).editors?.activeUri === 'string'
+                ? (payload as { editors: { activeUri: string } }).editors.activeUri
+                : null,
+            },
             now: options.now,
           });
           runtime.setExtensions(descriptors);
@@ -357,6 +368,20 @@ export function createBootstrapResponder(options: BootstrapResponderOptions): Re
           }
           return reply(message, 'response', { ok: true });
         }
+        case 'editors.sync': {
+          // The renderer sends the whole layout: there are a handful of
+          // editors, and reconciling a list is easier to get right than a
+          // stream of moves.
+          const payload = message.payload as { editors?: unknown; activeUri?: unknown } | null;
+          const editors = Array.isArray(payload?.editors)
+            ? payload.editors.filter(isEditorState)
+            : [];
+          requireRuntime().editors.sync(
+            editors,
+            typeof payload?.activeUri === 'string' ? payload.activeUri : null,
+          );
+          return reply(message, 'response', { ok: true, editors: editors.length });
+        }
         case 'configuration.update': {
           // Main owns precedence (default < override < user < workspace) and
           // ships the resolved values; the host never merges scopes itself.
@@ -409,6 +434,31 @@ export function createBootstrapResponder(options: BootstrapResponderOptions): Re
         : new RpcError('ACTIVATION_FAILED', err instanceof Error ? err.message : String(err)));
     }
   };
+}
+
+/** Validates one editor at the edge: an editor without a uri, or with
+ *  selections that are not numbers, would produce a caret nobody can trust. */
+function isEditorState(value: unknown): value is {
+  uri: string;
+  viewColumn: number;
+  selections: {
+    anchorLine: number;
+    anchorCharacter: number;
+    activeLine: number;
+    activeCharacter: number;
+  }[];
+} {
+  if (value === null || typeof value !== 'object') return false;
+  const state = value as Record<string, unknown>;
+  if (typeof state.uri !== 'string' || !state.uri) return false;
+  if (!Array.isArray(state.selections)) return false;
+  return state.selections.every((selection) => (
+    selection !== null
+    && typeof selection === 'object'
+    && ['anchorLine', 'anchorCharacter', 'activeLine', 'activeCharacter'].every(
+      (key) => typeof (selection as Record<string, unknown>)[key] === 'number',
+    )
+  ));
 }
 
 /** Full state for an opened document; missing fields take the neutral value

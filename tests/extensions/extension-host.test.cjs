@@ -493,6 +493,8 @@ function createLoadingResponder() {
       commandBridge: input.commandBridge,
       request: input.request,
       configuration: input.configuration,
+      documents: input.documents,
+      editors: input.editors,
     }),
   });
 
@@ -1144,4 +1146,96 @@ test('an extension sees the dirty buffer and the whole document lifecycle', asyn
 
   // And the mirror is what answers about content, not the disk.
   assert.equal(mirror.contentOf('/w/preexistente.txt'), 'ya estaba');
+});
+
+// ── Editores de punta a punta (incremento 4.2) ──────────────────────────
+
+test('an extension follows the focus and reads the selected text', async () => {
+  const host = createLoadingResponder();
+  const descriptor = hostDescriptor('editors');
+
+  await host.request('lifecycle.initialize', {
+    protocol: 1,
+    apiVersion: '1.90.0',
+    extensions: [descriptor],
+    workspace: '/w',
+    configuration: {},
+    documents: [{
+      uri: '/w/a.txt',
+      languageId: 'plaintext',
+      version: 1,
+      content: 'const nombre = valor;',
+      isDirty: false,
+    }],
+    editors: {
+      editors: [{
+        uri: '/w/a.txt',
+        viewColumn: 1,
+        selections: [{
+          anchorLine: 0, anchorCharacter: 6, activeLine: 0, activeCharacter: 12,
+        }],
+      }],
+      activeUri: '/w/a.txt',
+    },
+  });
+  await host.request('lifecycle.activate', { id: descriptor.id });
+
+  // The editor that already existed is state, so no event fired for it, but
+  // the extension can read it — including the text under the selection.
+  const loaded = require(path.join(HOST_FIXTURES, 'editors', 'out', 'extension.js'));
+  assert.deepEqual(loaded.trace, []);
+  assert.equal(loaded.readSelectedText(), 'nombre');
+
+  // Now the user moves the caret and switches focus away.
+  await host.request('editors.sync', {
+    editors: [{
+      uri: '/w/a.txt',
+      viewColumn: 1,
+      selections: [{ anchorLine: 0, anchorCharacter: 0, activeLine: 0, activeCharacter: 5 }],
+    }],
+    activeUri: '/w/a.txt',
+  });
+  await host.request('editors.sync', { editors: [], activeUri: null });
+
+  assert.deepEqual(loaded.trace, [
+    'selection:/w/a.txt:0:5',
+    'active:none',
+  ]);
+});
+
+test('showTextDocument reaches main with preserveFocus, without opening a tab itself', async () => {
+  const host = createLoadingResponder();
+  const descriptor = hostDescriptor('editors');
+  await host.request('lifecycle.initialize', {
+    protocol: 1,
+    apiVersion: '1.90.0',
+    extensions: [descriptor],
+    workspace: '/w',
+    configuration: {},
+    documents: [],
+    editors: { editors: [], activeUri: null },
+  });
+  await host.request('lifecycle.activate', { id: descriptor.id });
+
+  const api = require('node:module')._load(
+    'vscode',
+    { filename: path.join(HOST_FIXTURES, 'editors', 'out', 'extension.js') },
+    false,
+  );
+  const shown = api.window.showTextDocument('/w/b.txt', { preserveFocus: true });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const outbound = host.lastOutbound();
+  assert.equal(outbound.method, 'editors.show');
+  assert.deepEqual(outbound.payload, { uri: '/w/b.txt', preserveFocus: true });
+
+  host.send({
+    v: 1,
+    gen: 7,
+    id: outbound.id,
+    kind: 'response',
+    method: 'editors.show',
+    payload: { shown: true },
+  });
+  await shown;
 });

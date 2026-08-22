@@ -216,6 +216,11 @@ líneas): `electron/main.ts`, `ExplorerPanel.tsx`, `EditorArea.tsx`,
   `workspace.textDocuments` con sus cuatro eventos. Una extensión ve el
   buffer sucio, no el disco; `TextDocument` calcula posiciones y líneas en el
   host para no convertir un linter en miles de round-trips.
+- **Extensiones Milestone 4.2**: `window.activeTextEditor`,
+  `visibleTextEditors`, selección con sus eventos y `showTextDocument` que
+  respeta `preserveFocus`. El layout se publica entero y deduplicado (el
+  caret cambia en cada pulsación) y un editor sin su documento se descarta en
+  vez de inventarse.
 
 Actualmente `store.ts` ha delegado Layout, Terminal, Git, Remote y Extensiones a
 slices específicos. Siguen inline: workspace, tabs, editor, IA, Live Server,

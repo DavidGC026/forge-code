@@ -141,8 +141,63 @@ completo por el protocolo, incluida la revisión sin guardar).
 - **Un fallo al notificar al host no interrumpe al usuario.** Escribir en el
   editor no puede fallar porque una extensión esté reiniciándose.
 
+## Incremento 4.2 — editores, selección y `showTextDocument`
+
+Completado (2026-08-22). Criterio de salida del diseño §7: *«Una fixture lee
+la selección y abre un documento sin robar el foco»*.
+
+- **`EditorRegistry`** (host): `window.activeTextEditor`,
+  `visibleTextEditors` y los eventos de foco, selección y visibilidad. Un
+  editor es una **vista** de un documento, así que su `document` es el mismo
+  objeto que la extensión ya tiene de `workspace.textDocuments`; un editor
+  cuyo documento el host no conoce se descarta en vez de inventarse.
+- **La instancia del editor también es estable.** Cambiar la selección
+  actualiza el editor que la extensión guardó, no lo sustituye.
+- **El layout viaja entero en cada cambio**, no como stream de movimientos:
+  hay un puñado de editores, y reconciliar una lista es mucho más fácil de
+  acertar. El servicio del renderer compara con lo último enviado y **no
+  republica** si nada cambió — el caret dispara eventos en cada pulsación, y
+  sin eso el canal más ruidoso de la aplicación sería el que no lleva
+  información.
+- **Conversión de coordenadas en un solo sitio**: Monaco es 1-based y la API
+  de VS Code 0-based. Se traduce al publicar, para que ningún consumidor
+  tenga que recordarlo.
+- **`showTextDocument`** cruza al renderer y **espera**: la promesa de la
+  extensión se resuelve cuando la pestaña existe de verdad. `preserveFocus`
+  se honra —revelar un documento en segundo plano no roba el cursor— y la
+  espera tiene tope: un renderer que no conteste no puede dejar a la
+  extensión colgada el resto de la sesión.
+- **La política de rutas también aplica a revelar**: `editors.show` hace
+  `stat` bajo las mismas reglas que `workspace.fs`, porque abrir un documento
+  no puede ser la forma de rodear lo que el sistema de archivos rechaza.
+- **`editor.edit()` no está**, y se nota a propósito: pertenece al 4.3 con el
+  resto de la maquinaria de edición, y un edit builder a medias sería peor
+  que un `UnsupportedApiError` honesto.
+
+Pruebas añadidas (11 casos; la suite pasa de 336 a 347 tests):
+`documents.test.cjs` (+9: editor con su caret y foco, instancia estable,
+sync idéntico que no dispara nada, editor sin documento descartado, cierre
+que limpia el activo, multi-cursor con el primario primero, constructor del
+layout, ruta activa inexistente reportada como «sin foco» y servicio que sólo
+envía lo que cambió) y `extension-host.test.cjs` (+2: la fixture leyendo el
+texto bajo la selección y siguiendo el foco por el protocolo, y
+`showTextDocument` con `preserveFocus` viajando a main).
+
+### Decisiones del incremento 4.2
+
+- **El layout se publica entero y se deduplica.** Es la respuesta a que el
+  caret cambie constantemente: barato de construir, y el que no cambia no
+  cruza.
+- **Sin documento no hay editor.** `editor.document` tiene que ser el objeto
+  que la extensión ya conoce; cualquier otra cosa produce dos vistas del
+  mismo archivo que no se comparan iguales.
+- **`showTextDocument` espera al renderer.** Una promesa que resuelve antes
+  de que el editor exista hace que la línea siguiente de la extensión —leer
+  `activeTextEditor`— falle de forma intermitente.
+
 ## Próximo incremento
 
-4.2 — `window.activeTextEditor`, `visibleTextEditors`, selección y
-`showTextDocument`. El espejo ya lleva los documentos; falta la capa de
-editores encima, que es state del renderer igual que los buffers.
+4.3 — `WorkspaceEdit`, `applyEdit` y edit builders con version checks. Es el
+incremento que cierra el bucle: hasta ahora las extensiones **observan** el
+trabajo del usuario; a partir de ahí lo **modifican**, y las versiones que el
+4.1 dejó viajando son lo que hace verificable cada edición.

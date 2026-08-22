@@ -181,3 +181,85 @@ export class DocumentSyncService {
     this.documents.clear();
   }
 }
+
+// ── Editor layout ───────────────────────────────────────────────────────
+//
+// Which editors are visible, where the caret is, and which one has focus.
+// Published whole on every change: there is a handful of editors, and a
+// list is easier to reconcile correctly than a stream of moves.
+
+export interface EditorLayoutSelection {
+  anchorLine: number;
+  anchorCharacter: number;
+  activeLine: number;
+  activeCharacter: number;
+}
+
+export interface EditorLayoutEntry {
+  uri: string;
+  viewColumn: number;
+  selections: EditorLayoutSelection[];
+  visibleRanges?: { startLine: number; endLine: number }[];
+}
+
+export interface EditorLayout {
+  editors: EditorLayoutEntry[];
+  activeUri: string | null;
+}
+
+export interface EditorSyncOptions {
+  send: (layout: EditorLayout) => void;
+}
+
+export class EditorSyncService {
+  private last = '';
+  // Assigned in the constructor body, not as a parameter property: these
+  // modules are loaded by `node --test` through type stripping, which only
+  // accepts erasable TypeScript.
+  private readonly options: EditorSyncOptions;
+
+  constructor(options: EditorSyncOptions) {
+    this.options = options;
+  }
+
+  /** Sends the layout if it actually changed. The caret fires events on
+   *  every keystroke, and re-publishing an identical layout would make the
+   *  busiest channel in the app the one that carries no information. */
+  publish(layout: EditorLayout): void {
+    const fingerprint = JSON.stringify(layout);
+    if (fingerprint === this.last) return;
+    this.last = fingerprint;
+    this.options.send(layout);
+  }
+
+  reset(): void {
+    this.last = '';
+  }
+}
+
+/** Builds the layout from the workbench's own vocabulary (tabs + caret), so
+ *  the component that knows Monaco does not have to know the wire shape. */
+export function buildEditorLayout(
+  tabs: readonly { path: string }[],
+  activePath: string | null,
+  selectionsByPath: Readonly<Record<string, EditorLayoutSelection[]>> = {},
+): EditorLayout {
+  const editors = tabs
+    .filter((tab) => Boolean(tab.path))
+    .map((tab) => ({
+      uri: tab.path,
+      // Forge has a single editor group today; saying 1 (instead of
+      // inventing columns) keeps an extension's `viewColumn` check honest.
+      viewColumn: 1,
+      selections: selectionsByPath[tab.path] ?? [
+        { anchorLine: 0, anchorCharacter: 0, activeLine: 0, activeCharacter: 0 },
+      ],
+    }));
+
+  return {
+    editors,
+    activeUri: activePath && editors.some((editor) => editor.uri === activePath)
+      ? activePath
+      : null,
+  };
+}

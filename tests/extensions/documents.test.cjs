@@ -393,3 +393,145 @@ test('closing cancels a pending change: the document is gone, its edit is moot',
 
   assert.deepEqual(s.sent.map((event) => event.kind), ['open', 'close']);
 });
+
+// ── EditorRegistry y layout (incremento 4.2) ────────────────────────────
+
+const {
+  EditorRegistry,
+} = require('../../dist-electron/extension-host/editor-registry.js');
+const {
+  EditorSyncService,
+  buildEditorLayout,
+} = require('../../src/extensions/documentSync.ts');
+
+const caret = (line, character) => ({
+  anchorLine: line,
+  anchorCharacter: character,
+  activeLine: line,
+  activeCharacter: character,
+});
+
+function createEditors(uris = ['/w/a.txt']) {
+  const documents = new DocumentRegistry();
+  for (const uri of uris) documents.reset(uris.map((u) => state(u, `contenido de ${u}`)));
+  const events = [];
+  const registry = new EditorRegistry(documents);
+  registry.onDidChangeActiveTextEditor((editor) => {
+    events.push(`active:${editor ? editor.document.fileName : 'none'}`);
+  });
+  registry.onDidChangeTextEditorSelection((event) => {
+    events.push(`selection:${event.textEditor.document.fileName}:${event.selections[0].active.line}`);
+  });
+  registry.onDidChangeVisibleTextEditors((editors) => {
+    events.push(`visible:${editors.length}`);
+  });
+  return { registry, documents, events };
+}
+
+test('an editor appears with its caret and becomes the active one', () => {
+  const e = createEditors();
+
+  e.registry.sync([{ uri: '/w/a.txt', viewColumn: 1, selections: [caret(2, 5)] }], '/w/a.txt');
+
+  const editor = e.registry.activeTextEditor;
+  assert.equal(editor.document.fileName, '/w/a.txt');
+  assert.equal(editor.selection.active.line, 2);
+  assert.equal(editor.selection.active.character, 5);
+  assert.equal(editor.viewColumn, 1);
+  assert.deepEqual(e.events, ['visible:1', 'active:/w/a.txt']);
+});
+
+test('the editor instance is stable across selection changes', () => {
+  const e = createEditors();
+  e.registry.sync([{ uri: '/w/a.txt', viewColumn: 1, selections: [caret(0, 0)] }], '/w/a.txt');
+  const first = e.registry.activeTextEditor;
+
+  e.registry.sync([{ uri: '/w/a.txt', viewColumn: 1, selections: [caret(4, 2)] }], '/w/a.txt');
+
+  assert.equal(e.registry.activeTextEditor, first, 'extensions hold on to the editor');
+  assert.equal(first.selection.active.line, 4);
+  assert.equal(e.events.at(-1), 'selection:/w/a.txt:4');
+});
+
+test('an identical sync fires nothing: the caret moves constantly', () => {
+  const e = createEditors();
+  const layout = [{ uri: '/w/a.txt', viewColumn: 1, selections: [caret(1, 1)] }];
+  e.registry.sync(layout, '/w/a.txt');
+  e.events.length = 0;
+
+  e.registry.sync(layout, '/w/a.txt');
+
+  assert.deepEqual(e.events, []);
+});
+
+test('an editor whose document the host does not know is dropped, not invented', () => {
+  const e = createEditors();
+
+  e.registry.sync([{ uri: '/w/desconocido.txt', viewColumn: 1, selections: [caret(0, 0)] }], '/w/desconocido.txt');
+
+  assert.deepEqual(e.registry.visibleTextEditors, []);
+  assert.equal(e.registry.activeTextEditor, undefined, 'editor.document must be a real document');
+});
+
+test('closing the last editor clears the active one', () => {
+  const e = createEditors();
+  e.registry.sync([{ uri: '/w/a.txt', viewColumn: 1, selections: [caret(0, 0)] }], '/w/a.txt');
+  e.events.length = 0;
+
+  e.registry.sync([], null);
+
+  assert.equal(e.registry.activeTextEditor, undefined);
+  assert.deepEqual(e.events, ['visible:0', 'active:none']);
+});
+
+test('a multi-cursor selection is reported whole, with the primary first', () => {
+  const e = createEditors();
+
+  e.registry.sync([{
+    uri: '/w/a.txt',
+    viewColumn: 1,
+    selections: [caret(1, 0), caret(3, 4)],
+  }], '/w/a.txt');
+
+  const editor = e.registry.activeTextEditor;
+  assert.equal(editor.selections.length, 2);
+  assert.equal(editor.selection.active.line, 1, 'selection is selections[0]');
+});
+
+test('the layout builder converts tabs and skips what has no path', () => {
+  const layout = buildEditorLayout(
+    [{ path: '/w/a.txt' }, { path: '' }, { path: '/w/b.txt' }],
+    '/w/b.txt',
+    { '/w/a.txt': [caret(2, 2)] },
+  );
+
+  assert.deepEqual(layout.editors.map((editor) => editor.uri), ['/w/a.txt', '/w/b.txt']);
+  assert.equal(layout.activeUri, '/w/b.txt');
+  assert.deepEqual(layout.editors[0].selections, [caret(2, 2)]);
+  assert.deepEqual(
+    layout.editors[1].selections,
+    [caret(0, 0)],
+    'a tab never focused still has a caret at the origin',
+  );
+});
+
+test('an active path with no editor is reported as no focus, not as a lie', () => {
+  const layout = buildEditorLayout([{ path: '/w/a.txt' }], '/w/cerrado.txt');
+
+  assert.equal(layout.activeUri, null);
+});
+
+test('the sync service only sends what changed', () => {
+  const sent = [];
+  const service = new EditorSyncService({ send: (layout) => sent.push(layout) });
+  const layout = buildEditorLayout([{ path: '/w/a.txt' }], '/w/a.txt');
+
+  service.publish(layout);
+  service.publish(buildEditorLayout([{ path: '/w/a.txt' }], '/w/a.txt'));
+  service.publish(buildEditorLayout([{ path: '/w/a.txt' }], '/w/a.txt', {
+    '/w/a.txt': [caret(9, 0)],
+  }));
+
+  assert.equal(sent.length, 2, 'an identical layout is not republished');
+  assert.equal(sent[1].editors[0].selections[0].activeLine, 9);
+});

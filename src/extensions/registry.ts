@@ -22,7 +22,7 @@ import {
 } from './contributionRegistry';
 import { contextKeys } from './contextKeys';
 import { ExtensionCommandService, KeybindingService } from './commands';
-import { DocumentSyncService } from './documentSync';
+import { DocumentSyncService, EditorSyncService } from './documentSync';
 import { TextmateGrammarService } from './textmate';
 import { EditorMenuService } from './editorMenu';
 import type { IOnigLib } from 'vscode-textmate';
@@ -515,6 +515,19 @@ export const documentSyncService = new DocumentSyncService({
       }).electronAPI?.ext?.syncDocument?.(event);
     } catch {
       /* outside Electron there is no host to mirror to */
+    }
+  },
+});
+
+/** Publishes the editor layout (visible editors, caret, focus) to the host. */
+export const editorSyncService = new EditorSyncService({
+  send: (layout) => {
+    try {
+      (window as unknown as {
+        electronAPI?: { ext?: { syncEditors?: (payload: unknown) => void } };
+      }).electronAPI?.ext?.syncEditors?.(layout);
+    } catch {
+      /* outside Electron there is no host to publish to */
     }
   },
 });

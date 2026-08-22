@@ -219,7 +219,9 @@ Estado: **en progreso**. Incremento 4.0 completó `Uri`, workspace folders y
 extensión en sólo lectura y storage), autorizada sobre el realpath y con el
 filesystem como puerto: local por Node y remoto por un puente SSH. Incremento
 4.1 añadió el espejo de documentos y `workspace.textDocuments` con sus
-eventos: una extensión ve el buffer del usuario, no el disco. Diseño y
+eventos: una extensión ve el buffer del usuario, no el disco. Incremento 4.2
+añadió los editores encima: `activeTextEditor`, selección con sus eventos y
+`showTextDocument` respetando `preserveFocus`. Diseño y
 plan de incrementos 4.0–4.6:
 [extensions-phase4-design.md](./extensions-phase4-design.md) · progreso:
 [extensions-phase4-progress.md](./extensions-phase4-progress.md)
@@ -358,10 +360,10 @@ El Milestone 3 está cerrado: los siete incrementos (3.0–3.6) están hechos y
 el gate de seguridad queda cubierto salvo la integración con un
 `utilityProcess` real, que este entorno no puede ejecutar sin display.
 
-El próximo cambio de código es el **incremento 4.2**: `window.activeTextEditor`,
-`visibleTextEditors`, selección y `showTextDocument`. El espejo de documentos
-ya está; falta la capa de editores encima, que es estado del renderer igual
-que los buffers.
+El próximo cambio de código es el **incremento 4.3**: `WorkspaceEdit`,
+`applyEdit` y edit builders con version checks. Cierra el bucle: hasta ahora
+las extensiones observan el trabajo del usuario, y a partir de ahí lo
+modifican — con las versiones del 4.1 haciendo verificable cada edición.
 
 Diseño: [extensions-phase3-design.md](./extensions-phase3-design.md).
 Progreso del kernel: [extensions-phase3-progress.md](./extensions-phase3-progress.md).

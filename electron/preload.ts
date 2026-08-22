@@ -34,6 +34,29 @@ export type ExtensionCommandResult =
   | { ok: true; result: unknown }
   | { ok: false; error: { code: string; message: string } };
 
+/** Editor layout as the extension host sees it. */
+export interface EditorSyncPayload {
+  editors: {
+    uri: string;
+    viewColumn: number;
+    selections: {
+      anchorLine: number;
+      anchorCharacter: number;
+      activeLine: number;
+      activeCharacter: number;
+    }[];
+    visibleRanges?: { startLine: number; endLine: number }[];
+  }[];
+  activeUri: string | null;
+}
+
+/** A request from an extension to reveal a document. */
+export interface EditorShowRequest {
+  id: number;
+  uri: string;
+  preserveFocus: boolean;
+}
+
 /** One buffer event for the extension host's document mirror. */
 export type DocumentSyncPayload =
   | {
@@ -322,6 +345,14 @@ export interface ElectronAPI {
     notifyLanguage: (language: string) => void;
     /** Mirrors an open buffer for `workspace.textDocuments`. */
     syncDocument: (event: DocumentSyncPayload) => void;
+    /** Publishes the editor layout for `window.activeTextEditor`. */
+    syncEditors: (payload: EditorSyncPayload) => void;
+    /** Extensions asking to reveal a document (`showTextDocument`). */
+    onShowDocument: (
+      callback: (request: EditorShowRequest) => void,
+    ) => { dispose: () => void };
+    /** Answers one, with whether the document ended up visible. */
+    respondShowDocument: (id: number, shown: boolean) => void;
     /** Messages extensions ask Forge to show (`window.show*Message`). */
     onHostMessage: (
       callback: (message: ExtensionHostMessage) => void,
@@ -728,6 +759,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // on an extension activating, nor fail when one does.
     notifyLanguage: (language: string) => ipcRenderer.send('ext:activate:language', language),
     syncDocument: (event: DocumentSyncPayload) => ipcRenderer.send('ext:documents:sync', event),
+    syncEditors: (payload: EditorSyncPayload) => ipcRenderer.send('ext:editors:sync', payload),
+    onShowDocument: (callback: (request: EditorShowRequest) => void) => {
+      const handler = (_event: unknown, payload: EditorShowRequest) => {
+        try {
+          callback(payload);
+        } catch (err) {
+          console.error('[forge] onShowDocument callback error:', err);
+        }
+      };
+      ipcRenderer.on('ext:editor:show', handler);
+      return {
+        dispose: () => ipcRenderer.removeListener('ext:editor:show', handler),
+      };
+    },
+    respondShowDocument: (id: number, shown: boolean) =>
+      ipcRenderer.send('ext:editor:shown', id, shown),
     onHostMessage: (callback: (message: ExtensionHostMessage) => void) => {
       const handler = (_event: unknown, payload: ExtensionHostMessage) => {
         try {

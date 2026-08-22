@@ -494,6 +494,29 @@ export type ExtensionCommandResult =
   | { ok: true; result: unknown }
   | { ok: false; error: { code: string; message: string } };
 
+/** Editor layout as the extension host sees it. */
+export interface EditorSyncPayload {
+  editors: {
+    uri: string;
+    viewColumn: number;
+    selections: {
+      anchorLine: number;
+      anchorCharacter: number;
+      activeLine: number;
+      activeCharacter: number;
+    }[];
+    visibleRanges?: { startLine: number; endLine: number }[];
+  }[];
+  activeUri: string | null;
+}
+
+/** A request from an extension to reveal a document. */
+export interface EditorShowRequest {
+  id: number;
+  uri: string;
+  preserveFocus: boolean;
+}
+
 /** One buffer event for the extension host's document mirror. */
 export type DocumentSyncPayload =
   | {
@@ -959,6 +982,14 @@ export interface ElectronAPI {
     notifyLanguage: (language: string) => void;
     /** Mirrors an open buffer for `workspace.textDocuments`. */
     syncDocument: (event: DocumentSyncPayload) => void;
+    /** Publishes the editor layout for `window.activeTextEditor`. */
+    syncEditors: (payload: EditorSyncPayload) => void;
+    /** Extensions asking to reveal a document (`showTextDocument`). */
+    onShowDocument: (
+      callback: (request: EditorShowRequest) => void,
+    ) => { dispose: () => void };
+    /** Answers one, with whether the document ended up visible. */
+    respondShowDocument: (id: number, shown: boolean) => void;
     /** Messages extensions ask Forge to show (`window.show*Message`). */
     onHostMessage: (
       callback: (message: ExtensionHostMessage) => void,

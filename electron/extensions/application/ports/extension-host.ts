@@ -58,6 +58,8 @@ export interface ExtensionHostInitializePayload {
     content: string;
     isDirty: boolean;
   }[];
+  /** Editor layout at that moment, and which one had focus. */
+  editors: { editors: unknown[]; activeUri: string | null };
 }
 
 /** What the host answers to the handshake. */

@@ -698,6 +698,7 @@ const extensionHost = new UtilityProcessExtensionHost({
     trust: getWorkspaceTrustStatus().state === 'trusted',
     configuration: effectiveConfigurationSnapshot(),
     documents: openDocumentsSnapshot(),
+    editors: editorLayout,
   }),
   // Host → main requests. Only `window.showMessage` so far; everything else
   // falls through to the broker's `UNSUPPORTED_API`, which is what feeds the
@@ -705,6 +706,23 @@ const extensionHost = new UtilityProcessExtensionHost({
   onRequest: async (envelope) => {
     if (envelope.method === 'window.showMessage') {
       return showExtensionMessage(envelope.payload, envelope.extensionId ?? null);
+    }
+    if (envelope.method === 'editors.show') {
+      const body = envelope.payload as { uri?: unknown; preserveFocus?: unknown } | null;
+      const uri = typeof body?.uri === 'string' ? body.uri : '';
+      if (!uri) {
+        throw new RpcError('INVALID_PAYLOAD', '"editors.show" requiere una uri.');
+      }
+      if (!showDocumentInRenderer) {
+        throw new RpcError('HOST_UNAVAILABLE', 'No hay ventana donde mostrar el documento.');
+      }
+      // The path policy applies here too: revealing a file must not become
+      // the way around what `workspace.fs` refuses.
+      await extensionFileSystem.handle(envelope.extensionId ?? '', 'stat', { uri });
+      const shown = await showDocumentInRenderer(uri, {
+        preserveFocus: body?.preserveFocus === true,
+      });
+      return { shown };
     }
     if (envelope.method === 'documents.open') {
       return openDocumentForExtension(envelope.payload, envelope.extensionId ?? '');
@@ -775,6 +793,38 @@ const documentMirror = new DocumentMirror({
   },
   log: (message) => console.warn('[forge:ext-host]', message),
 });
+
+// Editor layout, mirrored the same way as the documents: the renderer owns
+// it, main relays it, the host reads it. The whole picture travels on each
+// change because there is a handful of editors, not a stream of them.
+let editorLayout: { editors: unknown[]; activeUri: string | null } = {
+  editors: [],
+  activeUri: null,
+};
+
+/** Applies the editor layout published by the renderer. */
+export function syncExtensionEditors(raw: unknown): void {
+  const payload = raw as { editors?: unknown; activeUri?: unknown } | null;
+  editorLayout = {
+    editors: Array.isArray(payload?.editors) ? payload.editors : [],
+    activeUri: typeof payload?.activeUri === 'string' ? payload.activeUri : null,
+  };
+  if (extensionHost.state.status !== 'running') return;
+  void extensionHost.request('editors.sync', editorLayout).catch((err: Error) => {
+    console.warn('[forge:ext-host] editores no sincronizados:', err.message);
+  });
+}
+
+/** Wires how main asks the renderer to reveal a document. */
+let showDocumentInRenderer:
+  | ((uri: string, options: { preserveFocus: boolean }) => Promise<boolean>)
+  | null = null;
+
+export function configureExtensionDocumentReveal(
+  reveal: ((uri: string, options: { preserveFocus: boolean }) => Promise<boolean>) | null,
+): void {
+  showDocumentInRenderer = reveal;
+}
 
 /** Applies one document event from the renderer. Invalid payloads are
  *  dropped at the boundary instead of half-applied. */

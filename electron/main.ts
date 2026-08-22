@@ -64,6 +64,8 @@ import {
   SafeModeError,
   configureExtensionRemoteFileSystem,
   syncExtensionDocument,
+  syncExtensionEditors,
+  configureExtensionDocumentReveal,
 } from './extensions';
 import { RpcError } from './extensions/domain/rpc-protocol';
 import {
@@ -2098,6 +2100,38 @@ ipcMain.on('ext:host:message:respond', (_event, id: number, selection: string | 
 // typing must never wait on the extension subsystem.
 ipcMain.on('ext:documents:sync', (_event, payload: unknown) => {
   syncExtensionDocument(payload);
+});
+
+ipcMain.on('ext:editors:sync', (_event, payload: unknown) => {
+  syncExtensionEditors(payload);
+});
+
+// `window.showTextDocument`: main asks the renderer to reveal the file and
+// waits for it, so the extension's promise resolves when the editor really
+// exists. Pending reveals are keyed like the message boxes.
+const pendingReveals = new Map<number, (shown: boolean) => void>();
+let nextRevealId = 1;
+
+configureExtensionDocumentReveal((uri, options) => {
+  const [win] = BrowserWindow.getAllWindows();
+  if (!win) return Promise.resolve(false);
+  const id = nextRevealId++;
+  return new Promise<boolean>((resolve) => {
+    pendingReveals.set(id, resolve);
+    win.webContents.send('ext:editor:show', { id, uri, preserveFocus: options.preserveFocus });
+    // A renderer that never answers must not keep the extension waiting for
+    // the rest of the session.
+    setTimeout(() => {
+      if (pendingReveals.delete(id)) resolve(false);
+    }, 10_000).unref?.();
+  });
+});
+
+ipcMain.on('ext:editor:shown', (_event, id: number, shown: boolean) => {
+  const resolve = pendingReveals.get(id);
+  if (!resolve) return;
+  pendingReveals.delete(id);
+  resolve(shown === true);
 });
 
 ipcMain.on('ext:activate:language', (_event, language: string) => {

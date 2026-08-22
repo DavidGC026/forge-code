@@ -16,6 +16,7 @@ resultados que el modelo de fallos del diseño §6 distingue:
 | `helloworld` | el ejemplo oficial de VS Code, sin adaptar: criterio de salida del Milestone 3 |
 | `filesystem` | `workspace.fs`, workspace folders y la política de rutas (Milestone 4.0) |
 | `documents` | `workspace.textDocuments` y los cuatro eventos de documento (4.1) |
+| `editors` | `window.activeTextEditor`, selección y sus eventos (4.2) |
 
 ## Fixtures maliciosas de runtime (gate de seguridad §9)
 
