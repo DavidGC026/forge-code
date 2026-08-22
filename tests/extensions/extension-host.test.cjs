@@ -858,3 +858,143 @@ test('the unmodified Hello World activates by command, shows its message and dea
   assert.deepEqual(dispatcher.registered(), [], 'its command left with it');
   assert.equal(activation.stateOf(descriptor.id), 'idle');
 });
+
+// ── Aislamiento demostrado (incremento 3.5) ─────────────────────────────
+// Las fixtures hostiles no comprueban que Forge les impida hacer daño
+// dentro de su proceso —el modelo de VS Code tampoco lo hace— sino que el
+// daño no sale de ahí y queda diagnosticado.
+
+function createHostFor(names, hostOptions = {}) {
+  const descriptors = names.map(hostDescriptor);
+  const timers = createFakeTimers();
+  const launcher = createFakeLauncher(timers);
+  const events = [];
+  const host = new UtilityProcessExtensionHost({
+    launcher,
+    timers,
+    initialize: () => ({
+      apiVersion: '1.90.0',
+      extensions: descriptors,
+      workspace: null,
+      trust: true,
+      configuration: {},
+    }),
+    warn: () => {},
+    ...hostOptions,
+  });
+  host.onEvent((event) => events.push(event));
+  return { host, timers, launcher, events, descriptors };
+}
+
+test('an extension that hangs in activate times out without taking the host down', async () => {
+  const h = createHostFor(['hanging', 'commanding']);
+  await h.host.start();
+
+  const hung = assert.rejects(
+    h.host.request('lifecycle.activate', { id: 'forge-tests.hanging' }, {
+      extensionId: 'forge-tests.hanging',
+    }),
+    (err) => {
+      assert.equal(err.code, 'TIMEOUT');
+      return true;
+    },
+  );
+  // `lifecycle.activate` budgets 10 s (design §3.4).
+  await h.timers.advance(10_000);
+  await hung;
+
+  assert.equal(h.host.state.status, 'running', 'one timeout does not kill the host');
+  const timeout = h.events.find((event) => event.type === 'request-timeout');
+  assert.equal(timeout.extensionId, 'forge-tests.hanging', 'the culprit is named');
+
+  // Its neighbour is untouched.
+  const answer = await h.host.request('lifecycle.activate', { id: 'forge-tests.commanding' });
+  assert.equal(answer.status, 'active');
+});
+
+test('an extension that kills the process loses its generation, not Forge', async () => {
+  const h = createHostFor(['crasher']);
+  await h.host.start();
+  const first = h.launcher.latest();
+
+  // The fixture calls `process.exit`; the fake process models that as an exit.
+  first.exit(7);
+  await flush();
+
+  assert.equal(h.host.state.status, 'restarting');
+  assert.match(h.host.state.lastError.message, /terminó \(código 7\)/);
+
+  await h.timers.advance(500);
+  assert.equal(h.host.state.status, 'running');
+  assert.equal(h.host.state.generation, 2, 'a fresh generation, not a dead one');
+});
+
+test('killing the host mid-request rejects what was in flight instead of hanging it', async () => {
+  const h = createHostFor(['hanging']);
+  await h.host.start();
+
+  const inFlight = assert.rejects(
+    h.host.request('lifecycle.activate', { id: 'forge-tests.hanging' }),
+    (err) => {
+      assert.equal(err.code, 'HOST_UNAVAILABLE');
+      return true;
+    },
+  );
+  h.launcher.latest().exit(1);
+  await flush();
+  await inFlight;
+});
+
+test('a log storm is trimmed per extension without silencing its neighbours', async () => {
+  const h = createHostFor(['log-storm', 'commanding']);
+  await h.host.start();
+  const child = h.launcher.latest();
+
+  const line = (extensionId, message) => ({
+    v: 1,
+    gen: 1,
+    id: 0,
+    kind: 'event',
+    method: 'diagnostics.log',
+    extensionId,
+    payload: { level: 'info', message, extensionId },
+  });
+
+  for (let i = 0; i < 400; i += 1) child.deliver(line('forge-tests.log-storm', `ruido ${i}`));
+  child.deliver(line('forge-tests.commanding', 'algo importante'));
+  await h.timers.advance(100);
+
+  const entries = h.events.filter((event) => event.type === 'logs').flatMap((event) => event.entries);
+  const noisy = entries.filter((entry) => entry.extensionId === 'forge-tests.log-storm');
+  assert.ok(noisy.length < 400, 'the flood is trimmed');
+  assert.ok(
+    entries.some((entry) => entry.message === 'algo importante'),
+    'the quiet extension is still heard',
+  );
+  assert.ok(
+    entries.some((entry) => /rate exceeded/i.test(entry.message)),
+    'and the trimming is stated, not silent',
+  );
+});
+
+test('an extension cannot hijack a command id another one owns', async () => {
+  const h = createHostFor(['commanding', 'hijacker']);
+  await h.host.start();
+
+  await h.host.request('lifecycle.activate', { id: 'forge-tests.commanding' });
+  await assert.rejects(
+    h.host.request('lifecycle.activate', { id: 'forge-tests.hijacker' }),
+    (err) => {
+      assert.equal(err.code, 'ACTIVATION_FAILED');
+      assert.match(err.message, /ya está registrado/);
+      return true;
+    },
+  );
+
+  // The original owner keeps its command, and it still works.
+  const answer = await h.host.request('commands.execute', {
+    command: 'fixture.greet',
+    args: ['Forge'],
+  });
+  assert.equal(answer.result, 'hola, Forge');
+});

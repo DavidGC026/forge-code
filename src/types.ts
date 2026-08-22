@@ -494,6 +494,19 @@ export type ExtensionCommandResult =
   | { ok: true; result: unknown }
   | { ok: false; error: { code: string; message: string } };
 
+/** Whether Forge is running with every extension inert, and why. */
+export interface SafeModeStatus {
+  active: boolean;
+  source: 'off' | 'command-line' | 'user';
+  /** False when `--disable-extensions` holds it on: only a relaunch helps. */
+  canDisable: boolean;
+  reason: string | null;
+}
+
+export type SafeModeResult =
+  | { ok: true; status: SafeModeStatus }
+  | { ok: false; error: string; status: SafeModeStatus };
+
 /** A message an extension asked Forge to show. `items` are buttons. */
 export interface ExtensionHostMessage {
   id: number;
@@ -934,6 +947,12 @@ export interface ElectronAPI {
     ) => { dispose: () => void };
     /** Answers one, with the picked item or null when dismissed. */
     respondHostMessage: (id: number, selection: string | null) => void;
+    /** Safe Mode: Forge running with every extension inert. */
+    safeModeStatus: () => Promise<SafeModeStatus>;
+    setSafeMode: (enabled: boolean, reason?: string) => Promise<SafeModeResult>;
+    onSafeModeChanged: (
+      callback: (status: SafeModeStatus) => void,
+    ) => { dispose: () => void };
     setActiveTheme: (themeId: string | null) => Promise<boolean>;
     setActiveIconTheme: (iconThemeId: string | null) => Promise<boolean>;
   };

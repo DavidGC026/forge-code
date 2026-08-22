@@ -58,6 +58,10 @@ import {
   fireExtensionActivation,
   fireWorkspaceContainsActivation,
   resolveExtensionMessage,
+  getSafeModeStatus,
+  setSafeMode,
+  onSafeModeChanged,
+  SafeModeError,
 } from './extensions';
 import { RpcError } from './extensions/domain/rpc-protocol';
 import {
@@ -2055,6 +2059,27 @@ ipcMain.handle('ext:host:restart', async () => restartExtensionHost());
 ipcMain.handle('ext:host:commands', async () => getExtensionCommandRegistry());
 
 ipcMain.handle('ext:host:activation', async () => getExtensionActivationReport());
+
+// Safe Mode. Entering must work even when the host is wedged, so nothing
+// here waits on it: the decision is main's and the host follows.
+ipcMain.handle('ext:safe-mode:status', async () => getSafeModeStatus());
+
+ipcMain.handle('ext:safe-mode:set', async (_event, enabled: boolean, reason?: string) => {
+  try {
+    return { ok: true as const, status: await setSafeMode(Boolean(enabled), reason) };
+  } catch (err) {
+    if (err instanceof SafeModeError) {
+      return { ok: false as const, error: err.message, status: getSafeModeStatus() };
+    }
+    throw err;
+  }
+});
+
+onSafeModeChanged((status) => {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('ext:safe-mode:changed', status);
+  }
+});
 
 // The user answered (or dismissed) an extension's message. `send`, not
 // `invoke`: the renderer has nothing to wait for, and the host's promise is

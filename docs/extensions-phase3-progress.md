@@ -512,11 +512,81 @@ Pruebas añadidas (25 casos nuevos; la suite pasa de 240 a 265 tests):
 - **El scan tiene presupuesto.** `workspaceContains` es una comodidad; que
   cueste segundos al abrir una carpeta grande no lo sería.
 
+## Incremento 3.5 — Safe Mode y aislamiento demostrado
+
+Completado (2026-08-22). Criterio de salida del diseño §8: *«Extensión que
+revienta y extensión colgada, ambas diagnosticadas sin derribar Forge»*.
+
+- **Safe Mode** (`domain/safe-mode.ts` + `application/safe-mode-service.ts`):
+  existe para una sola situación —el usuario no puede volver a un editor
+  usable por culpa de una extensión— y sus reglas son de rescate, no de
+  comodidad. `--disable-extensions` (el mismo flag de VS Code, comparado
+  exacto: `--disable-extensions-foo` es otra cosa) manda pero **no
+  persiste**: escribirlo a disco convertiría un rescate puntual en un estado
+  permanente que nadie pidió. La decisión del usuario sí persiste, porque su
+  razón de ser es sobrevivir al reinicio que le saca del bucle. Salir con el
+  flag puesto **falla en voz alta** en vez de fingir que funcionó.
+- **Se comprueba en el origen**: `activatableExtensions()` devuelve vacío en
+  modo seguro, así que ningún descriptor puede llegar a una generación y
+  nada aguas abajo necesita acordarse. Entrar no depende de que el host esté
+  sano: es la salida del crash loop.
+- **Persistencia bajo su propia clave** (`extensionSafeMode`), separada del
+  registry de extensiones: el interruptor de rescate no puede caer con
+  aquello de lo que rescata. Decodifica sólo un `true` explícito, y salir
+  borra la clave en vez de escribir `false` — la ausencia es el estado
+  natural y un registro caducado es una explicación caducada.
+- **Fixtures maliciosas de runtime** (requisito del gate §9): `hanging`
+  (nunca devuelve el control), `crasher` (`process.exit` durante la
+  activación), `log-storm` (miles de líneas seguidas) y `hijacker` (registra
+  un id de comando ajeno). Están documentadas en el README de las fixtures
+  con lo que **no** prueban: dentro de su proceso una extensión tiene Node
+  completo, igual que en VS Code; lo que se demuestra es que el daño no sale
+  de ahí.
+- **Aislamiento demostrado** con cinco pruebas: la colgada agota su
+  presupuesto de 10 s, se responde `TIMEOUT` **nombrando a la culpable** y el
+  host sigue sirviendo a su vecina; la que mata el proceso pierde su
+  generación y vuelve otra con backoff, sin tocar a Forge; matar el host a
+  mitad de request rechaza lo pendiente con `HOST_UNAVAILABLE` en vez de
+  colgarlo; la tormenta de logs se recorta por extensión sin silenciar a las
+  demás y **diciendo** que se recortó; y el secuestro de un id de comando se
+  rechaza, con el dueño original conservando su comando en funcionamiento.
+- **Aislamiento real de la caché de `require` en el harness**: los procesos
+  falsos viven en el mismo Node que el runner, así que un módulo cacheado
+  conservaba la facade `vscode` de una generación anterior y registraba sus
+  comandos allí. En producción cada generación es un proceso y el problema
+  no existe; en pruebas lo era, y se veía como un falso duplicado de comando.
+
+Pruebas añadidas (14 casos; la suite pasa de 265 a 279 tests):
+`tests/extensions/safe-mode.test.cjs` (9: flag exacto, precedencia del
+comando sobre lo persistido, entrada persistida y notificada, salida que
+limpia la clave, salida rechazada con el flag puesto, config ilegible que lee
+«apagado», suscriptor que lanza sin romper el rescate, round-trip del store
+con basura, e independencia del registry) y `extension-host.test.cjs` (+5, el
+aislamiento descrito arriba).
+
+### Decisiones del incremento 3.5
+
+- **El flag no persiste; la decisión del usuario sí.** Son dos intenciones
+  distintas: una es «sácame de aquí ahora», la otra «quiero arrancar así».
+- **Salir falla si el flag manda.** Decir «hecho» cuando la siguiente lectura
+  seguirá diciendo «activo» es peor que negarse.
+- **Modo seguro por delante de la confianza.** Las dos deciden qué puede
+  ejecutarse antes de que se ejecute nada, y la más restrictiva gana.
+- **Las fixtures hostiles prueban contención, no imposibilidad.** Prometer
+  que una extensión no puede tocar el disco sería falso mientras el host sea
+  Node completo; lo que sí se sostiene es que no se lleva por delante ni a
+  Forge ni a sus compañeras.
+
+Sigue pendiente la **prueba de integración con un `utilityProcess` real**,
+anotada desde el 3.1: requiere `app.whenReady()` y en este entorno Electron
+aborta sin display (`--ozone-platform=headless` vuelca core y no hay `Xvfb`),
+así que ejecutarla obligaría a abrir una ventana. El sustituto sigue siendo
+la mitad en proceso de la batería de contrato, que ahora ejecuta extensiones
+fixture reales de punta a punta.
+
 ## Próximo incremento
 
-3.5 — Safe Mode, aislamiento demostrado y las fixtures maliciosas de
-runtime. El crash-loop breaker y el reinicio existen desde el 3.1; falta el
-arranque explícito sin extensiones, la prueba de integración con un
-`utilityProcess` real (pendiente desde el 3.1) y las fixtures que revientan
-y se cuelgan a propósito. Después, 3.6 pinta el estado del host, los tiempos
-de activación y los fallos que el 3.4 ya acumula y publica.
+3.6 — superficie de usuario: estado del host, tiempos de activación y fallos
+en la vista de detalle. Todo lo que necesita ya se publica
+(`ext:host:state`, `ext:host:activation`, `ext:host:commands`,
+`ext:safe-mode:*`).

@@ -4,7 +4,58 @@
 // transport and a fake launcher whose "process" runs the real bootstrap
 // responder. Nothing here waits in real time and nothing loads Electron.
 
+const fs = require('node:fs');
+const path = require('node:path');
+
 const { createBootstrapResponder } = require('../../../dist-electron/extension-host/bootstrap.js');
+const {
+  ExtensionRuntime,
+} = require('../../../dist-electron/extension-host/extension-runtime.js');
+
+/**
+ * Runtime for the fake processes.
+ *
+ * Identical to the shipped one except for the `require` cache: every fake
+ * "process" lives in the *same* Node instance as the test runner, so a
+ * cached module would keep the `vscode` facade of a previous generation and
+ * register its commands there. In production each generation is a real
+ * process and the question does not arise.
+ */
+function createTestRuntime(input) {
+  return new ExtensionRuntime({
+    apiVersion: input.apiVersion,
+    workspacePath: input.workspacePath,
+    moduleSystem: require('node:module'),
+    loadModule: (entryPoint) => {
+      delete require.cache[require.resolve(entryPoint)];
+      return require(entryPoint);
+    },
+    entryPointDeps: {
+      realpath: (target) => {
+        try {
+          return fs.realpathSync(target);
+        } catch {
+          return path.resolve(target);
+        }
+      },
+      isFile: (target) => {
+        try {
+          return fs.statSync(target).isFile();
+        } catch {
+          return false;
+        }
+      },
+    },
+    mementoStore: { read: () => ({}), write: () => undefined },
+    joinPath: (...segments) => path.join(...segments),
+    now: input.now,
+    log: input.log,
+    reportUnsupportedApi: input.reportUnsupportedApi,
+    commandBridge: input.commandBridge,
+    request: input.request,
+    configuration: input.configuration,
+  });
+}
 
 /** Lets queued promise callbacks run before assertions. */
 const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -153,7 +204,7 @@ function createFakeLauncher(timers, options = {}) {
         notify: (envelope) => {
           if (child.alive && !child.hung) child.deliver(envelope);
         },
-        createRuntime: options.createRuntime,
+        createRuntime: options.createRuntime ?? createTestRuntime,
       });
 
       generations.push(child);
@@ -199,6 +250,7 @@ function createFakeLauncher(timers, options = {}) {
 }
 
 module.exports = {
+  createTestRuntime,
   flush,
   createFakeTimers,
   createFakeTransport,

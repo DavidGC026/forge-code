@@ -34,6 +34,19 @@ export type ExtensionCommandResult =
   | { ok: true; result: unknown }
   | { ok: false; error: { code: string; message: string } };
 
+/** Whether Forge is running with every extension inert, and why. */
+export interface SafeModeStatus {
+  active: boolean;
+  source: 'off' | 'command-line' | 'user';
+  /** False when `--disable-extensions` holds it on: only a relaunch helps. */
+  canDisable: boolean;
+  reason: string | null;
+}
+
+export type SafeModeResult =
+  | { ok: true; status: SafeModeStatus }
+  | { ok: false; error: string; status: SafeModeStatus };
+
 /** A message an extension asked Forge to show. `items` are buttons; the
  *  renderer answers with the chosen one, or null when dismissed. */
 export interface ExtensionHostMessage {
@@ -297,6 +310,12 @@ export interface ElectronAPI {
     ) => { dispose: () => void };
     /** Answers one, with the picked item or null when dismissed. */
     respondHostMessage: (id: number, selection: string | null) => void;
+    /** Safe Mode: Forge running with every extension inert. */
+    safeModeStatus: () => Promise<SafeModeStatus>;
+    setSafeMode: (enabled: boolean, reason?: string) => Promise<SafeModeResult>;
+    onSafeModeChanged: (
+      callback: (status: SafeModeStatus) => void,
+    ) => { dispose: () => void };
     setActiveTheme: (themeId: string | null) => Promise<boolean>;
     setActiveIconTheme: (iconThemeId: string | null) => Promise<boolean>;
   };
@@ -705,6 +724,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     respondHostMessage: (id: number, selection: string | null) =>
       ipcRenderer.send('ext:host:message:respond', id, selection),
+    safeModeStatus: () => ipcRenderer.invoke('ext:safe-mode:status'),
+    setSafeMode: (enabled: boolean, reason?: string) =>
+      ipcRenderer.invoke('ext:safe-mode:set', enabled, reason),
+    onSafeModeChanged: (callback: (status: SafeModeStatus) => void) => {
+      const handler = (_event: unknown, payload: SafeModeStatus) => {
+        try {
+          callback(payload);
+        } catch (err) {
+          console.error('[forge] onSafeModeChanged callback error:', err);
+        }
+      };
+      ipcRenderer.on('ext:safe-mode:changed', handler);
+      return {
+        dispose: () => ipcRenderer.removeListener('ext:safe-mode:changed', handler),
+      };
+    },
     trustStatus: () => ipcRenderer.invoke('ext:trust:status'),
     grantWorkspaceTrust: () => ipcRenderer.invoke('ext:trust:grant'),
     revokeWorkspaceTrust: () => ipcRenderer.invoke('ext:trust:revoke'),

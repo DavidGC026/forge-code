@@ -1,0 +1,8 @@
+{
+  "name": "log-storm",
+  "publisher": "forge-tests",
+  "version": "1.0.0",
+  "engines": { "vscode": "^1.80.0" },
+  "main": "./out/extension.js",
+  "activationEvents": ["onStartupFinished"]
+}

@@ -65,6 +65,12 @@ import {
   type ActivationMetric,
 } from './extensions/application/extension-activation-service';
 import { scanWorkspaceForPatterns } from './extensions/infrastructure/workspace-scanner';
+import {
+  SafeModeService,
+  SafeModeError,
+} from './extensions/application/safe-mode-service';
+import { ForgeSafeModeStore } from './extensions/infrastructure/forge-safe-mode-store';
+import type { SafeModeStatus } from './extensions/domain/safe-mode';
 import { RpcError } from './extensions/domain/rpc-protocol';
 import {
   WorkspaceTrustService,
@@ -315,6 +321,32 @@ const workspaceTrustService = new WorkspaceTrustService({
   store: new ForgeWorkspaceTrustStore({ readConfig: loadConfig, writeConfig: saveConfig }),
   workspace: () => workspaceProvider(),
 });
+
+// Safe Mode lives next to trust: both decide what may run before anything
+// runs. It is the way out of a crash loop, so it is resolved entirely on
+// this side — the host simply finds nothing to load.
+const safeModeService = new SafeModeService({
+  store: new ForgeSafeModeStore({ readConfig: loadConfig, writeConfig: saveConfig }),
+  argv: () => process.argv,
+});
+
+export function getSafeModeStatus(): SafeModeStatus {
+  return safeModeService.status();
+}
+
+/** Enters or leaves Safe Mode and syncs the host. Resolves with the new
+ *  status; throws `SafeModeError` when the command line holds it on. */
+export async function setSafeMode(enabled: boolean, reason?: string): Promise<SafeModeStatus> {
+  const status = safeModeService.set(enabled, reason);
+  await syncExtensionHost(enabled ? 'modo seguro activado' : 'modo seguro desactivado');
+  return status;
+}
+
+export function onSafeModeChanged(listener: (status: SafeModeStatus) => void): () => void {
+  return safeModeService.onDidChange(listener);
+}
+
+export { SafeModeError };
 
 /** Trust of the open workspace, for IPC and the extension payloads. */
 export function getWorkspaceTrustStatus(): WorkspaceTrustStatusPayload {
@@ -592,6 +624,10 @@ export function uninstallExtension(id: string): boolean {
  *  A blocked extension is not merely hidden in the UI: it never reaches the
  *  host, so no generation can load it by mistake. */
 function activatableExtensions(): InstalledExtensionRecord[] {
+  // Safe Mode is checked first and at the source: nothing downstream should
+  // have to remember it, and no descriptor may reach a generation while it
+  // is on.
+  if (safeModeService.active) return [];
   const trustState = getWorkspaceTrustStatus().state;
   return extensionRegistry
     .list()
