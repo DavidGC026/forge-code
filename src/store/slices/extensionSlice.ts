@@ -1,7 +1,9 @@
 import { StateCreator } from 'zustand';
 import type {
+  ExtensionActivationReport,
   ExtensionConfigurationValue,
   ExtensionHostState,
+  SafeModeStatus,
   InstalledExtension,
   MarketplaceSearchResult,
   SidebarPanel,
@@ -48,12 +50,20 @@ export interface ExtensionSlice {
   workspaceTrustError: string | null;
   /** Extension host state, mirrored from main. `null` outside Electron. */
   extensionHostState: ExtensionHostState | null;
+  /** Activation timings and failures of the live generation. */
+  extensionActivation: ExtensionActivationReport | null;
+  /** Safe Mode: Forge running with every extension inert. */
+  safeMode: SafeModeStatus;
+  /** Last Safe Mode error (trying to leave while the flag holds it on). */
+  safeModeError: string | null;
 
   /** Subscribes to host state and keeps `extensionHostState` in step.
    *  Returns the unsubscribe so the app can drop it on teardown. */
   watchExtensionHost: () => () => void;
   /** Asks main for a fresh host generation (safe when it is disabled). */
   restartExtensionHost: () => Promise<void>;
+  /** Enters or leaves Safe Mode. Resolves with an error message, or null. */
+  setSafeMode: (enabled: boolean, reason?: string) => Promise<string | null>;
 
   /** Load the installed-extension list from the main process and wire
    *  supported contributions into Monaco. Called once on startup. */
@@ -184,6 +194,9 @@ export const createExtensionSlice: StateCreator<
   },
   workspaceTrustError: null,
   extensionHostState: null,
+  extensionActivation: null,
+  safeMode: { active: false, source: 'off', canDisable: true, reason: null },
+  safeModeError: null,
 
   watchExtensionHost: () => {
     const api = window.electronAPI?.ext;
@@ -213,9 +226,32 @@ export const createExtensionSlice: StateCreator<
       commandSubscription = api.onHostCommandsChanged(setHostCommands);
     }
 
+    // Activation timings and failures, and Safe Mode. Both are pushed by
+    // main, so the panel never polls: the first read seeds the state and
+    // the subscription keeps it in step.
+    let activationSubscription: { dispose: () => void } | null = null;
+    if (api.activationReport && api.onActivationChanged) {
+      void api.activationReport()
+        .then((report) => set({ extensionActivation: report }))
+        .catch(() => undefined);
+      activationSubscription = api.onActivationChanged(
+        (report) => set({ extensionActivation: report }),
+      );
+    }
+
+    let safeModeSubscription: { dispose: () => void } | null = null;
+    if (api.safeModeStatus && api.onSafeModeChanged) {
+      void api.safeModeStatus()
+        .then((status) => set({ safeMode: status }))
+        .catch(() => undefined);
+      safeModeSubscription = api.onSafeModeChanged((status) => set({ safeMode: status }));
+    }
+
     return () => {
       subscription.dispose();
       commandSubscription?.dispose();
+      activationSubscription?.dispose();
+      safeModeSubscription?.dispose();
       setHostCommandRunner(null);
       setHostCommands([]);
     };
@@ -228,6 +264,24 @@ export const createExtensionSlice: StateCreator<
       set({ extensionHostState: await api.restartHost() });
     } catch (err) {
       console.error('Failed to restart the extension host:', err);
+    }
+  },
+
+  setSafeMode: async (enabled: boolean, reason?: string) => {
+    const api = window.electronAPI?.ext;
+    if (!api?.setSafeMode) return null;
+    try {
+      const answer = await api.setSafeMode(enabled, reason);
+      set({ safeMode: answer.status, safeModeError: answer.ok ? null : answer.error });
+      // Extensions stop or start contributing wholesale, so the inventory
+      // is re-read rather than patched: their payloads carry the trust and
+      // activation state main resolved.
+      await get().refreshExtensions();
+      return answer.ok ? null : answer.error;
+    } catch (err) {
+      const message = cleanIpcError((err as Error).message);
+      set({ safeModeError: message });
+      return message;
     }
   },
 

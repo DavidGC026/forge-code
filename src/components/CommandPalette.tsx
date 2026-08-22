@@ -65,6 +65,10 @@ export default function CommandPalette() {
   const installExtensionById = useStore((s) => s.installExtensionById);
   const setColorTheme = useStore((s) => s.setColorTheme);
   const installedExtensions = useStore((s) => s.installedExtensions);
+  const hostState = useStore((s) => s.extensionHostState);
+  const safeMode = useStore((s) => s.safeMode);
+  const restartExtensionHost = useStore((s) => s.restartExtensionHost);
+  const setSafeMode = useStore((s) => s.setSafeMode);
   const openTabs = useStore((s) => s.openTabs);
   const activeTabId = useStore((s) => s.activeTabId);
   const workspacePath = useStore((s) => s.workspacePath);
@@ -196,9 +200,54 @@ export default function CommandPalette() {
     [installedExtensions, close],
   );
 
+  // Extension Host controls. They live here, not in `buildCommands`,
+  // because they only make sense while there is a host to talk to — and
+  // Safe Mode must stay reachable from the palette precisely when the
+  // panel is the thing an extension broke.
+  const hostCommandEntries: Command[] = useMemo(() => {
+    if (!hostState) return [];
+    const entries: Command[] = [{
+      id: 'ext-host-restart',
+      label: 'Extensions: Restart Extension Host',
+      category: 'Extensions',
+      keywords: ['host', 'reiniciar', 'restart'],
+      action: () => {
+        void restartExtensionHost();
+        close();
+      },
+    }];
+
+    if (safeMode.active) {
+      if (safeMode.canDisable) {
+        entries.push({
+          id: 'ext-host-safe-mode-off',
+          label: 'Extensions: Exit Safe Mode',
+          category: 'Extensions',
+          keywords: ['safe', 'seguro', 'extensiones'],
+          action: () => {
+            void setSafeMode(false);
+            close();
+          },
+        });
+      }
+    } else {
+      entries.push({
+        id: 'ext-host-safe-mode-on',
+        label: 'Extensions: Start With Extensions Disabled (Safe Mode)',
+        category: 'Extensions',
+        keywords: ['safe', 'seguro', 'disable', 'deshabilitar'],
+        action: () => {
+          void setSafeMode(true, 'Activado desde la paleta de comandos.');
+          close();
+        },
+      });
+    }
+    return entries;
+  }, [hostState, safeMode, restartExtensionHost, setSafeMode, close]);
+
   const paletteCommands = useMemo(
-    () => [...allCommands, ...extensionCommandEntries],
-    [allCommands, extensionCommandEntries],
+    () => [...allCommands, ...extensionCommandEntries, ...hostCommandEntries],
+    [allCommands, extensionCommandEntries, hostCommandEntries],
   );
 
   const commandMap = useMemo(

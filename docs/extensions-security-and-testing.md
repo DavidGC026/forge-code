@@ -155,8 +155,8 @@ No se ejecuta código de terceros hasta pasar:
 | Enable/disable fuera del host | Cubierto | Milestone 1 |
 | Workspace Trust básico | Cubierto | Milestone 3.0 ([progreso](./extensions-phase3-trust.md)) |
 | Fixtures maliciosos mínimos de **package** | Cubierto | Milestone 3.0 (`tests/fixtures/extensions/malicious/`) |
-| Fixtures maliciosos mínimos de **runtime** | Pendiente | Requiere host (3.5) |
+| Fixtures maliciosos mínimos de **runtime** | Cubierto | Milestone 3.5 (`hanging`, `crasher`, `log-storm`, `hijacker`) |
 | RPC schema/timeout/heartbeat | Cubierto | Milestone 3.1 ([progreso](./extensions-phase3-progress.md)) |
-| Crash isolation demostrado | Pendiente | Milestone 3.5 |
+| Crash isolation demostrado | Cubierto | Milestone 3.5 (timeout de la colgada, crash con backoff, request en vuelo rechazado) |
 | Logs y reporte de activation failure | Cubierto | Milestone 3.4 (`ext:host:activation`, métricas y fallos por generación) |
-| Safe Mode | Pendiente | Milestone 3.5 |
+| Safe Mode | Cubierto | Milestone 3.5 (`--disable-extensions` y decisión persistida, comprobado en el origen) |

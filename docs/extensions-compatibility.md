@@ -21,7 +21,7 @@ genérico “Active”.
 
 ## Estado real al 2026-08-22
 
-Actualizada tras el Milestone 3.4
+Actualizada tras el Milestone 3 (incremento 3.6)
 ([extensions-phase3-progress.md](./extensions-phase3-progress.md)).
 El motor declarativo cerró en el Milestone 2.
 
@@ -53,8 +53,8 @@ El motor declarativo cerró en el Milestone 2.
 | LSP/DAP/tasks/testing | `unsupported` | Forge tiene LSP/Git/terminal nativos, aún sin bridge de extensiones |
 | Views/webviews/notebooks | `unsupported` | Sin workbench contribution hosts |
 | Remote extension host | `unsupported` | Remote SSH no ejecuta extensiones junto al workspace |
-| Workspace Trust | `partial` | Trust por workspace y Restricted Mode con política de activación honrada por el host: una extensión bloqueada ni siquiera viaja en el handshake. Falta Safe Mode (3.5) |
-| Extension Host (kernel) | `partial` | `utilityProcess` con handshake, envelope RPC, heartbeat, backoff y circuit breaker; carga extensiones, activa por evento y ejecuta comandos — el Hello World oficial corre sin modificar. Faltan safe mode (3.5) y la superficie de usuario (3.6) |
+| Workspace Trust | `compatible` | Trust por workspace y Restricted Mode con política de activación honrada por el host: una extensión bloqueada ni siquiera viaja en el handshake. Safe Mode (`--disable-extensions` o decisión persistida) vacía el conjunto activable en el origen |
+| Extension Host (kernel) | `compatible` | `utilityProcess` con handshake, envelope RPC, heartbeat, backoff y circuit breaker; carga extensiones, activa por evento, ejecuta comandos y se diagnostica en la UI (estado, tiempos, fallos). Safe Mode disponible. El Hello World oficial corre sin modificar |
 
 ## Matriz objetivo por contribution point
 

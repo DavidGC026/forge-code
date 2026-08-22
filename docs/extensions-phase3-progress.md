@@ -584,9 +584,63 @@ así que ejecutarla obligaría a abrir una ventana. El sustituto sigue siendo
 la mitad en proceso de la batería de contrato, que ahora ejecuta extensiones
 fixture reales de punta a punta.
 
-## Próximo incremento
+## Incremento 3.6 — superficie de usuario (Milestone 3 completo)
 
-3.6 — superficie de usuario: estado del host, tiempos de activación y fallos
-en la vista de detalle. Todo lo que necesita ya se publica
-(`ext:host:state`, `ext:host:activation`, `ext:host:commands`,
-`ext:safe-mode:*`).
+Completado (2026-08-22). Criterio de salida del diseño §8: *«La vista de
+detalle deja de decir "needs the Extension Host" para lo que ya corre»*. No
+hubo que añadir ni un canal: todo lo que la UI necesita lo publicaban ya los
+incrementos anteriores.
+
+- **Derivación pura** (`src/extensions/hostStatus.ts`): qué decir del host y
+  de cada extensión, fuera de React y por tanto verificable sin DOM. La UI
+  elige colores; estas funciones deciden qué es verdad.
+- **Un host sano dice casi nada.** Una línea con la generación en curso, y
+  ninguna explicación. Un aviso permanente de «todo bien» deja de significar
+  algo, así que sólo se gana espacio lo accionable: reinicios recientes,
+  breaker disparado, error de la generación anterior.
+- **Modo seguro, en cambio, siempre es visible y explica cómo salir** — o por
+  qué no se puede, cuando manda `--disable-extensions`. Es justo el estado
+  que un usuario olvida que tiene activo antes de pasarse una tarde
+  preguntándose por qué no funciona nada.
+- **Runtime por extensión** en la vista de detalle: si activó, qué la
+  despertó traducido a lenguaje reconocible (`onCommand:x` → «por el comando
+  x»), lo que tardó, y si falló, el mensaje. Una extensión que nunca se ha
+  disparado dice exactamente eso, en vez de pintarse como rota o como sana.
+- **El último dato manda**: un fallo sólo cuenta mientras sea la última
+  palabra. Una extensión que falló y luego activó en otra generación está
+  activa, no fallida.
+- **Paleta de comandos**: *Restart Extension Host* y *Start With Extensions
+  Disabled (Safe Mode)* / *Exit Safe Mode*. Viven ahí, y no sólo en el panel,
+  porque el panel es precisamente lo que puede haber roto una extensión.
+- Se retiraron los textos que hablaban en futuro del Extension Host, ahora
+  que ejecuta código de verdad.
+
+Pruebas añadidas (12 casos; la suite pasa de 279 a 291 tests):
+`tests/extensions/host-status.test.cjs` — host sano sin detalle, reinicios
+recientes con su plural, breaker que ofrece el reinicio manual, reinicio en
+curso que se explica con su error, host detenido que distingue «nada que
+ejecutar» de un fallo, ausencia de host fuera de Electron, extensión sin
+disparar, extensión activa con su motivo y coste, el último dato mandando en
+ambos sentidos, aislamiento entre extensiones, formato de duraciones y
+traducción de los activation events.
+
+### Decisiones del incremento 3.6
+
+- **La lógica de qué decir no vive en el componente.** Es la parte que se
+  equivoca en silencio, y la que conviene poder probar.
+- **El estado sano se calla.** Es la diferencia entre un panel que informa y
+  uno que decora.
+- **Los motivos de activación se traducen.** `workspaceContains:pom.xml` es
+  vocabulario del protocolo; «porque el workspace contiene pom.xml» es lo que
+  responde a la pregunta que el usuario se está haciendo. Lo que Forge no
+  sepa traducir se muestra tal cual, sin adivinar.
+
+## Estado del Milestone 3
+
+Los siete incrementos (3.0–3.6) están cerrados. El gate de seguridad de
+[extensions-security-and-testing.md](./extensions-security-and-testing.md) §9
+queda cubierto salvo la prueba de integración con un `utilityProcess` real,
+que este entorno no puede ejecutar sin display y sigue anotada.
+
+El siguiente milestone es el 4 (workspace, documentos y edición), según
+[extensions-roadmap.md](./extensions-roadmap.md).

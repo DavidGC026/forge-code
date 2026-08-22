@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import type { AgentTerminalId, InstalledExtension, MarketplaceExtension } from '../types';
 import WorkspaceTrustBanner from './WorkspaceTrustBanner';
+import ExtensionHostStatus from './ExtensionHostStatus';
 
 function formatCount(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -239,6 +240,7 @@ export default function ExtensionsPanel() {
         </button>
 
         <WorkspaceTrustBanner />
+        <ExtensionHostStatus />
 
         {(extError || marketplaceError) && (
           <p className="mt-2 text-[11px] leading-snug text-red-400/90">

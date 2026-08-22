@@ -156,7 +156,7 @@ Criterios de salida:
 
 Objetivo: activar de forma aislada extensiones simples basadas en comandos.
 
-Estado: **en progreso**. Incremento 3.0 cerró Workspace Trust y Restricted
+Estado: **completado**. Incremento 3.0 cerró Workspace Trust y Restricted
 Mode, y de paso tres agujeros reales de instalación que las fixtures
 maliciosas destaparon: symlinks que escapaban del paquete, un `publisher`
 con separadores que escribía fuera del store y capacidades contradictorias
@@ -178,9 +178,11 @@ con `*`, `onStartupFinished`, `onCommand`, `onLanguage` y
 `workspaceContains`), `window.show*Message` con notificaciones no modales,
 `workspace.getConfiguration` por snapshot síncrono y las métricas y fallos
 de activación: con él, el Hello World oficial corre sin modificar, que es
-el criterio de salida del milestone. Pendientes: 3.5 (safe mode,
-aislamiento demostrado y fixtures maliciosas de runtime) y 3.6 (superficie
-de usuario del host).
+el criterio de salida del milestone. Incremento 3.5 añadió Safe Mode
+(`--disable-extensions` y decisión persistida, comprobada en el origen), las
+fixtures maliciosas de runtime y el aislamiento demostrado; el 3.6 cerró el
+milestone con la superficie de usuario: estado del host, modo seguro,
+tiempos y fallos de activación por extensión, y los comandos de la paleta.
 
 Diseño detallado (runtime, protocolo RPC, activación, modelo de fallos y
 plan de incrementos 3.0–3.6):
@@ -342,12 +344,15 @@ Criterios de salida:
 
 ## Primer incremento recomendado
 
-El próximo cambio de código es el **incremento 3.5**: Safe Mode, aislamiento
-demostrado y fixtures maliciosas de runtime. El reinicio y el crash-loop
-breaker existen desde el 3.1 y el 3.4 dejó publicados los fallos de
-activación; falta el arranque explícito sin extensiones, la prueba de
-integración con un `utilityProcess` real y las fixtures que revientan y se
-cuelgan a propósito.
+El Milestone 3 está cerrado: los siete incrementos (3.0–3.6) están hechos y
+el gate de seguridad queda cubierto salvo la integración con un
+`utilityProcess` real, que este entorno no puede ejecutar sin display.
+
+El próximo cambio de código es el **Milestone 4**: workspace, documentos y
+edición (`workspace.fs`, `TextDocument`, `TextEditor`, eventos de cambio y
+`onDidSaveTextDocument`). El seam está listo: la facade por extensión ya
+acepta miembros implementados que sombrean el default que lanza, y
+`workspace` es hoy el namespace con más `UnsupportedApiError` reportados.
 
 Diseño: [extensions-phase3-design.md](./extensions-phase3-design.md).
 Progreso del kernel: [extensions-phase3-progress.md](./extensions-phase3-progress.md).

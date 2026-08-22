@@ -2,10 +2,10 @@
 //
 // Two small services with a single seam between them:
 //
-//   • ExtensionCommandService — maps command ids to runtime handlers and
-//     executes them. Declarative `contributes.commands` only ships
-//     metadata; until the Extension Host (Milestone 3) provides handlers,
-//     executing one is a well-reported no-op.
+//   • ExtensionCommandService — maps command ids to handlers and executes
+//     them. A local handler wins; otherwise the command falls through to
+//     the Extension Host, which activates its extension on demand. Only a
+//     command nobody owns is a well-reported no-op.
 //   • KeybindingService — resolves `contributes.keybindings` chords for
 //     the current platform and dispatches keyboard events to commands,
 //     gated by their `when`-clauses.

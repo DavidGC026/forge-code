@@ -195,6 +195,15 @@ líneas): `electron/main.ts`, `ExplorerPanel.tsx`, `EditorArea.tsx`,
   `workspace.getConfiguration` servido desde un snapshot que main mantiene
   en step (síncrono, como en VS Code).
   Ver [extensions-phase3-progress.md](./extensions-phase3-progress.md).
+- **Extensiones Milestone 3.5 y 3.6 (Milestone 3 completo)**: Safe Mode
+  (`--disable-extensions` que no persiste y decisión de usuario que sí,
+  comprobada en el origen), fixtures maliciosas de runtime y aislamiento
+  demostrado —colgada, crash, request en vuelo, tormenta de logs y secuestro
+  de comando—, más la superficie de usuario: estado del host y modo seguro en
+  el panel, runtime por extensión (qué la despertó, cuánto tardó, por qué
+  falló) en la vista de detalle, y los comandos de la paleta. Con esto los
+  siete incrementos 3.0–3.6 están cerrados.
+  Ver [extensions-phase3-progress.md](./extensions-phase3-progress.md).
 
 Actualmente `store.ts` ha delegado Layout, Terminal, Git, Remote y Extensiones a
 slices específicos. Siguen inline: workspace, tabs, editor, IA, Live Server,
