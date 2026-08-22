@@ -27,6 +27,7 @@ import { TerminalSlice, createTerminalSlice } from './store/slices/terminalSlice
 import { GitSlice, createGitSlice } from './store/slices/gitSlice';
 import { RemoteSlice, createRemoteSlice } from './store/slices/remoteSlice';
 import { ExtensionSlice, createExtensionSlice } from './store/slices/extensionSlice';
+import { documentSyncService } from './extensions/registry';
 
 export type SelectedNodeKind = 'file' | 'directory';
 
@@ -1421,6 +1422,9 @@ export const useStore = create<EditorState>((set, get, api) => ({
             : t
         ),
       }));
+      // `onDidSaveTextDocument` must see the text that was written, so the
+      // save carries it instead of racing the pending change event.
+      documentSyncService.save(latest.path, latest.content);
     } catch (err) {
       console.error('Failed to save file:', err);
     }

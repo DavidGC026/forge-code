@@ -74,8 +74,75 @@ en un workspace temporal a través del protocolo completo).
   soportada, para que el día que exista un sandbox real (Milestone 9) no haya
   que romper extensiones para aplicarlo.
 
+## Incremento 4.1 — espejo de documentos y `workspace.textDocuments`
+
+Completado (2026-08-22). Criterio de salida del diseño §7: *«Una fixture ve
+el buffer sucio, no el disco, y recibe open/change/save/close»*.
+
+- **`DocumentMirror`** (application): réplica en main de los buffers del
+  renderer. Su única razón de existir es responder bien a una pregunta —qué
+  ve el usuario en este archivo ahora— y por eso `contentOf` devuelve `null`
+  cuando el archivo no está abierto: sólo entonces se cae al disco.
+- **Las versiones las emite el renderer**, nunca main. Son lo que hará
+  verificable la `WorkspaceEdit` del 4.3, y una versión inventada aquí
+  validaría una edición contra una revisión que nunca existió. Un `change`
+  con versión igual o anterior se **descarta con explicación**, igual que uno
+  de un documento que nunca se abrió: el espejo prefiere quedarse corto a
+  inventar.
+- **`TextDocument`** (host): `getText`, `lineAt`, `offsetAt`, `positionAt`,
+  `getWordRangeAtPosition`, `validateRange`. Todo se calcula en el host
+  porque son las llamadas que ocurren en bucle — un linter sobre 2000 líneas
+  serían 2000 round-trips. El índice de líneas se recalcula al cambiar el
+  contenido, no por llamada, y `positionAt` hace búsqueda binaria.
+- **Instancia estable**: un `change` actualiza el documento que la extensión
+  ya tiene, no lo sustituye. Devolver un objeto nuevo congelaría la vista de
+  quien lo guardó en `onDidOpenTextDocument`, sin ningún error que lo
+  explicara.
+- **`Position`, `Range` y `Selection`** como primitivas inmutables, con la
+  normalización de VS Code (un rango construido al revés se ordena solo) y
+  `Selection` conservando de qué lado está el cursor. `Range` sólo se congela
+  cuando es realmente un `Range`: `Selection` lo extiende y aún tiene campos
+  que asignar — un fallo que la primera versión tuvo y las pruebas
+  destaparon.
+- **`DocumentSyncService`** (renderer): versiones monótonas, *debounce* de
+  los cambios, contenido completo, y `flush` antes de un guardado para que
+  `onDidSaveTextDocument` vea el texto guardado y no el anterior. Un
+  contenido idéntico no es un cambio: en Forge los agentes escriben en los
+  buffers mediante streaming, y sin esa comprobación cada escritura
+  programática sería un evento.
+- **`openTextDocument`** de un archivo sin pestaña lo lee del disco **sin**
+  abrirla, bajo la misma política de rutas que `workspace.fs` — abrir un
+  documento no puede ser la forma de rodearla.
+- El espejo se alimenta desde donde el editor ya sincronizaba con el
+  servidor de lenguaje, y cubre **todos** los buffers de texto, no sólo los
+  que un LSP entiende: a una extensión puede importarle cualquier archivo.
+
+Pruebas añadidas (26 casos; la suite pasa de 310 a 336 tests):
+`tests/extensions/documents.test.cjs` (25: primitivas, documento vacío con
+una línea, CRLF, clamp de offsets, palabra bajo el cursor, ciclo del
+registry con instancia estable, reapertura tratada como cambio, cambio
+huérfano descartado, `reset` que siembra sin eventos, el espejo devolviendo
+el buffer sucio, evento obsoleto descartado, host caído que no rompe la
+escritura del usuario, validación en el borde, y el servicio del renderer:
+debounce, contenido idéntico ignorado, flush al guardar, versiones
+monótonas, reconciliación de pestañas y cierre que cancela lo pendiente) y
+`extension-host.test.cjs` (+1: la fixture `documents` viendo el ciclo
+completo por el protocolo, incluida la revisión sin guardar).
+
+### Decisiones del incremento 4.1
+
+- **Contenido completo con debounce, no deltas.** Corrige el diseño inicial
+  y está anotado allí: es la estrategia con la que el editor ya sincroniza
+  con el LSP, y un segundo protocolo para el mismo texto significaría dos
+  fuentes de verdad. Los deltas llegarán cuando haya una medida que los pida.
+- **El espejo descarta lo dudoso.** Un evento obsoleto o huérfano no se
+  aplica: es preferible que el host vaya un instante por detrás a que
+  retroceda a una revisión que el usuario ya no tiene.
+- **Un fallo al notificar al host no interrumpe al usuario.** Escribir en el
+  editor no puede fallar porque una extensión esté reiniciándose.
+
 ## Próximo incremento
 
-4.1 — espejo de documentos en main y `workspace.textDocuments` con sus
-eventos. Es el incremento que hace verdadera la regla del diseño §1: un
-documento abierto se lee del buffer del usuario, nunca del disco.
+4.2 — `window.activeTextEditor`, `visibleTextEditors`, selección y
+`showTextDocument`. El espejo ya lleva los documentos; falta la capa de
+editores encima, que es state del renderer igual que los buffers.

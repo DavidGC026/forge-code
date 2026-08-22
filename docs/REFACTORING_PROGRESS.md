@@ -211,6 +211,11 @@ líneas): `electron/main.ts`, `ExplorerPanel.tsx`, `EditorArea.tsx`,
   SSH que main inyecta, con `FileSystemError` tipado de punta a punta.
   Ver [extensions-phase4-progress.md](./extensions-phase4-progress.md) y el
   [diseño del milestone](./extensions-phase4-design.md).
+- **Extensiones Milestone 4.1**: espejo de documentos en main alimentado por
+  el renderer (versiones monótonas suyas, debounce, contenido completo) y
+  `workspace.textDocuments` con sus cuatro eventos. Una extensión ve el
+  buffer sucio, no el disco; `TextDocument` calcula posiciones y líneas en el
+  host para no convertir un linter en miles de round-trips.
 
 Actualmente `store.ts` ha delegado Layout, Terminal, Git, Remote y Extensiones a
 slices específicos. Siguen inline: workspace, tabs, editor, IA, Live Server,

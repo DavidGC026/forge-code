@@ -81,6 +81,11 @@ import {
   type RemoteFileSystemBridge,
 } from './extensions/infrastructure/node-extension-file-system';
 import {
+  DocumentMirror,
+  parseDocumentSyncEvent,
+  type DocumentSyncEvent,
+} from './extensions/application/document-mirror';
+import {
   WorkspaceTrustService,
   WorkspaceTrustError,
 } from './extensions/application/workspace-trust-service';
@@ -692,6 +697,7 @@ const extensionHost = new UtilityProcessExtensionHost({
     workspace: workspaceProvider(),
     trust: getWorkspaceTrustStatus().state === 'trusted',
     configuration: effectiveConfigurationSnapshot(),
+    documents: openDocumentsSnapshot(),
   }),
   // Host → main requests. Only `window.showMessage` so far; everything else
   // falls through to the broker's `UNSUPPORTED_API`, which is what feeds the
@@ -699,6 +705,17 @@ const extensionHost = new UtilityProcessExtensionHost({
   onRequest: async (envelope) => {
     if (envelope.method === 'window.showMessage') {
       return showExtensionMessage(envelope.payload, envelope.extensionId ?? null);
+    }
+    if (envelope.method === 'documents.open') {
+      return openDocumentForExtension(envelope.payload, envelope.extensionId ?? '');
+    }
+    if (envelope.method === 'documents.save') {
+      // Saving belongs to the renderer, which owns the buffer. Until the
+      // editor exposes it (4.2), saying no is better than pretending.
+      throw new RpcError(
+        'UNSUPPORTED_API',
+        'Guardar un documento desde una extensión todavía no está soportado.',
+      );
     }
     if (ExtensionFileSystem.owns(envelope.method)) {
       if (!envelope.extensionId) {
@@ -734,6 +751,42 @@ function effectiveConfigurationSnapshot(): Record<string, unknown> {
     snapshot[entry.key] = entry.effectiveValue;
   }
   return snapshot;
+}
+
+// ── Documentos ──────────────────────────────────────────────────────────
+//
+// Main no es dueño del texto —Monaco lo es— así que mantiene una réplica
+// alimentada por el renderer, y la usa para responder lo único que importa:
+// qué ve el usuario en ese archivo ahora mismo.
+
+const documentMirror = new DocumentMirror({
+  notifyHost: (event, document) => {
+    if (extensionHost.state.status !== 'running') return;
+    void extensionHost
+      .request('documents.sync', {
+        kind: event.kind,
+        uri: document?.uri ?? (event as { uri?: string }).uri,
+        document,
+      })
+      .catch((err: Error) => {
+        // The user typing must never fail because the host is busy.
+        console.warn('[forge:ext-host] documento no sincronizado:', err.message);
+      });
+  },
+  log: (message) => console.warn('[forge:ext-host]', message),
+});
+
+/** Applies one document event from the renderer. Invalid payloads are
+ *  dropped at the boundary instead of half-applied. */
+export function syncExtensionDocument(raw: unknown): void {
+  const event = parseDocumentSyncEvent(raw);
+  if (!event) return;
+  documentMirror.apply(event);
+}
+
+/** Open buffers, for the handshake. */
+function openDocumentsSnapshot(): ReturnType<DocumentMirror['snapshot']> {
+  return documentMirror.snapshot();
 }
 
 // ── workspace.fs ────────────────────────────────────────────────────────
@@ -775,6 +828,44 @@ const extensionFileSystem = new ExtensionFileSystem({
     console.warn(`[forge:ext-host] "${extensionId}" rechazada sobre "${target}": ${message}`);
   },
 });
+
+/**
+ * `workspace.openTextDocument` for a file with no editor open. The mirror
+ * answers first: a file the user has open with unsaved changes must read as
+ * the buffer, never as what is on disk.
+ */
+async function openDocumentForExtension(
+  payload: unknown,
+  extensionId: string,
+): Promise<unknown> {
+  const uri = (payload as { uri?: unknown } | null)?.uri;
+  if (typeof uri !== 'string' || !uri) {
+    throw new RpcError('INVALID_PAYLOAD', '"documents.open" requiere una uri.');
+  }
+
+  const mirrored = documentMirror.get(uri);
+  if (mirrored) return mirrored;
+
+  const content = await readFileForExtension(uri, extensionId);
+  return {
+    uri,
+    languageId: 'plaintext',
+    version: 1,
+    content,
+    isDirty: false,
+  };
+}
+
+/** Reads a file for `openTextDocument`, under the same path policy as
+ *  `workspace.fs`: opening a document must not be a way around it. */
+async function readFileForExtension(uri: string, extensionId: string): Promise<string> {
+  const bytes = await extensionFileSystem.handle(
+    extensionId,
+    'readFile',
+    { uri },
+  ) as { data: Uint8Array };
+  return Buffer.from(bytes.data).toString('utf8');
+}
 
 // ── window.showMessage ──────────────────────────────────────────────────
 // The host asks, the renderer shows, the user (maybe) picks. Main holds the

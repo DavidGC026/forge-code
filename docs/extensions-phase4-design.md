@@ -81,9 +81,17 @@ correcto y no haya que romper extensiones.
 - **Ciclo**: `didOpen` al abrir pestaña, `didChange` al editar (agregado, no
   por pulsación), `didSave`, `didClose` al cerrarla. El host recibe eventos,
   nunca sondea.
-- **Contenido**: viaja entero en `didOpen` y por deltas en `didChange`. Un
-  documento grande no se reenvía por cada tecla; ése es exactamente el error
-  que hace inusable un host de extensiones.
+- **Contenido**: viaja entero, con *debounce*, no por pulsación. Es la misma
+  estrategia con la que el editor ya sincroniza sus buffers con el servidor
+  de lenguaje (`src/lsp/client.ts`), y reutilizarla evita un segundo
+  mecanismo —y una segunda fuente de verdad— sobre el mismo buffer.
+
+  > Corrección respecto a la primera versión de este diseño, que pedía
+  > deltas en `didChange`. Los deltas son la optimización correcta cuando el
+  > volumen lo justifique, y el riesgo §8 ya dice que se mide antes de
+  > ampliar; introducirlos ahora significaría mantener dos protocolos de
+  > sincronización distintos para el mismo contenido, uno de ellos sin
+  > ningún dato que lo respalde todavía.
 - `openTextDocument` de un archivo no abierto lo lee del disco **sin** abrir
   pestaña: en VS Code tampoco la abre, y hacerlo convertiría cualquier
   extensión en algo que reordena el editor del usuario.

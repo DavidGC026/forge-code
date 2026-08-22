@@ -21,7 +21,7 @@ genérico “Active”.
 
 ## Estado real al 2026-08-22
 
-Actualizada tras el incremento 4.0
+Actualizada tras el incremento 4.1
 ([extensions-phase3-progress.md](./extensions-phase3-progress.md)).
 El motor declarativo cerró en el Milestone 2.
 
@@ -49,6 +49,7 @@ El motor declarativo cerró en el Milestone 2.
 | Extension `main` | `partial` | Se carga y se ejecuta en el host: entrypoint contenido por realpath, `require('vscode')` por dueño y `activate`/`deactivate` con aislamiento de fallos |
 | Extension `browser` | `metadata` | No existe Web Extension Host |
 | Activation events | `partial` | `*`, `onStartupFinished`, `onCommand`, `onLanguage` y `workspaceContains` (scan acotado) activan de verdad, con métricas y fallos por generación; el resto se reconoce como no despachable en lugar de ignorarse |
+| Text documents | `partial` | `workspace.textDocuments`, `openTextDocument` y los eventos open/change/save/close sobre un espejo del buffer real (no del disco); `TextDocument` con `getText`/`lineAt`/`offsetAt`/`positionAt`. Sin editores ni ediciones todavía (4.2/4.3) |
 | `workspace.fs` | `partial` | `stat`/`read`/`write`/`readDirectory`/`createDirectory`/`delete`/`rename`/`copy` con `FileSystemError` tipado, local y SSH por la misma abstracción; restringido a workspace, directorio de la extensión (lectura) y storage — más estricto que VS Code, a propósito |
 | VS Code API | `partial` | Facade por extensión con primitivas (`Disposable`, `EventEmitter`, `Uri`, cancelación), enums, `commands`, `window.show*Message`, `workspace.getConfiguration` (snapshot síncrono, sólo lectura) y `ExtensionContext`; el resto lanza `UnsupportedApiError` y se reporta para el análisis de compatibilidad |
 | LSP/DAP/tasks/testing | `unsupported` | Forge tiene LSP/Git/terminal nativos, aún sin bridge de extensiones |

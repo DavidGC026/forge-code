@@ -228,6 +228,7 @@ export class UtilityProcessExtensionHost implements ExtensionHost {
       workspace: null,
       trust: false,
       configuration: {},
+      documents: [],
     };
   }
 

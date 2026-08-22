@@ -302,3 +302,152 @@ function normalizePath(value: string): string {
 function encodeUriComponentMinimal(value: string): string {
   return value.replace(/[#?\s]/g, (char) => encodeURIComponent(char));
 }
+
+// ── Position, Range, Selection ──────────────────────────────────────────
+// Value types of the text model. Immutable, like VS Code's: extensions pass
+// them around and compare them, and a mutable `Range` turns "the edit I
+// requested" into "the edit as somebody else left it".
+
+export class Position {
+  readonly line: number;
+  readonly character: number;
+
+  constructor(line: number, character: number) {
+    // Negative coordinates are a bug in the caller, not a state to carry:
+    // VS Code clamps them, and so do we, rather than producing a range that
+    // silently matches nothing.
+    this.line = Math.max(0, Math.floor(line) || 0);
+    this.character = Math.max(0, Math.floor(character) || 0);
+    Object.freeze(this);
+  }
+
+  isBefore(other: Position): boolean {
+    return this.line < other.line
+      || (this.line === other.line && this.character < other.character);
+  }
+
+  isBeforeOrEqual(other: Position): boolean {
+    return this.isBefore(other) || this.isEqual(other);
+  }
+
+  isAfter(other: Position): boolean {
+    return other.isBefore(this);
+  }
+
+  isAfterOrEqual(other: Position): boolean {
+    return other.isBeforeOrEqual(this);
+  }
+
+  isEqual(other: Position): boolean {
+    return this.line === other.line && this.character === other.character;
+  }
+
+  compareTo(other: Position): number {
+    if (this.isBefore(other)) return -1;
+    return this.isEqual(other) ? 0 : 1;
+  }
+
+  translate(lineDelta = 0, characterDelta = 0): Position {
+    return new Position(this.line + lineDelta, this.character + characterDelta);
+  }
+
+  with(line = this.line, character = this.character): Position {
+    return new Position(line, character);
+  }
+}
+
+export class Range {
+  readonly start: Position;
+  readonly end: Position;
+
+  constructor(
+    startOrStartLine: Position | number,
+    startCharacterOrEnd: number | Position,
+    endLine?: number,
+    endCharacter?: number,
+  ) {
+    // Both overloads VS Code accepts: (Position, Position) and four numbers.
+    const start = startOrStartLine instanceof Position
+      ? startOrStartLine
+      : new Position(startOrStartLine, startCharacterOrEnd as number);
+    const end = startOrStartLine instanceof Position
+      ? startCharacterOrEnd as Position
+      : new Position(endLine ?? 0, endCharacter ?? 0);
+
+    // Normalised so `start` is always the earlier one: extensions build
+    // ranges from a selection dragged backwards without thinking about it.
+    const inverted = end.isBefore(start);
+    this.start = inverted ? end : start;
+    this.end = inverted ? start : end;
+    // Only when this *is* a Range: `Selection` extends it and still has its
+    // own fields to set, and freezing here would make that throw.
+    if (new.target === Range) Object.freeze(this);
+  }
+
+  get isEmpty(): boolean {
+    return this.start.isEqual(this.end);
+  }
+
+  get isSingleLine(): boolean {
+    return this.start.line === this.end.line;
+  }
+
+  contains(positionOrRange: Position | Range): boolean {
+    if (positionOrRange instanceof Range) {
+      return this.contains(positionOrRange.start) && this.contains(positionOrRange.end);
+    }
+    return positionOrRange.isAfterOrEqual(this.start)
+      && positionOrRange.isBeforeOrEqual(this.end);
+  }
+
+  isEqual(other: Range): boolean {
+    return this.start.isEqual(other.start) && this.end.isEqual(other.end);
+  }
+
+  intersection(other: Range): Range | undefined {
+    const start = this.start.isAfter(other.start) ? this.start : other.start;
+    const end = this.end.isBefore(other.end) ? this.end : other.end;
+    return start.isAfter(end) ? undefined : new Range(start, end);
+  }
+
+  union(other: Range): Range {
+    return new Range(
+      this.start.isBefore(other.start) ? this.start : other.start,
+      this.end.isAfter(other.end) ? this.end : other.end,
+    );
+  }
+
+  with(start = this.start, end = this.end): Range {
+    return new Range(start, end);
+  }
+}
+
+export class Selection extends Range {
+  readonly anchor: Position;
+  readonly active: Position;
+
+  constructor(
+    anchorOrAnchorLine: Position | number,
+    activeOrAnchorCharacter: Position | number,
+    activeLine?: number,
+    activeCharacter?: number,
+  ) {
+    const anchor = anchorOrAnchorLine instanceof Position
+      ? anchorOrAnchorLine
+      : new Position(anchorOrAnchorLine, activeOrAnchorCharacter as number);
+    const active = anchorOrAnchorLine instanceof Position
+      ? activeOrAnchorCharacter as Position
+      : new Position(activeLine ?? 0, activeCharacter ?? 0);
+
+    super(anchor, active);
+    // The range is normalised; anchor and active are not, because their
+    // whole point is remembering which end the caret is on.
+    this.anchor = anchor;
+    this.active = active;
+    Object.freeze(this);
+  }
+
+  get isReversed(): boolean {
+    return this.active.isBefore(this.anchor);
+  }
+}

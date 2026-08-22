@@ -22,6 +22,7 @@ import {
 } from './contributionRegistry';
 import { contextKeys } from './contextKeys';
 import { ExtensionCommandService, KeybindingService } from './commands';
+import { DocumentSyncService } from './documentSync';
 import { TextmateGrammarService } from './textmate';
 import { EditorMenuService } from './editorMenu';
 import type { IOnigLib } from 'vscode-textmate';
@@ -498,6 +499,24 @@ export const extensionCommandService = new ExtensionCommandService({
   executeRemote: (command, args) => (hostCommandRunner
     ? hostCommandRunner(command, args)
     : Promise.reject(new Error('el Extension Host no está conectado'))),
+});
+
+/**
+ * Mirrors open buffers to the Extension Host. It lives here, next to the
+ * other workbench-level services, so `registry.ts` stays the single place
+ * the editor talks to about extensions — and, like the rest of this module,
+ * it holds no reference to `window`: the transport is wired from outside.
+ */
+export const documentSyncService = new DocumentSyncService({
+  send: (event) => {
+    try {
+      (window as unknown as {
+        electronAPI?: { ext?: { syncDocument?: (payload: unknown) => void } };
+      }).electronAPI?.ext?.syncDocument?.(event);
+    } catch {
+      /* outside Electron there is no host to mirror to */
+    }
+  },
 });
 
 /** Dispatches contributed keybindings, gated by their when-clauses. */

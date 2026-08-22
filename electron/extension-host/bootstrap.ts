@@ -53,6 +53,7 @@ export interface BootstrapResponderOptions {
 export interface RuntimeFactoryInput {
   apiVersion: string;
   workspacePath: string | null;
+  documents: NonNullable<ExtensionRuntimeOptions['documents']>;
   log: ExtensionRuntimeOptions['log'];
   reportUnsupportedApi: ExtensionRuntimeOptions['reportUnsupportedApi'];
   commandBridge: CommandBridge;
@@ -87,6 +88,7 @@ function createDefaultRuntime(input: RuntimeFactoryInput): ExtensionRuntime {
         }
       },
     },
+    documents: input.documents,
     // Storage paths travel in each descriptor, decided and sanitised by main.
     mementoStore: createFsMementoStore(),
     joinPath: (...segments) => path.join(...segments),
@@ -245,7 +247,7 @@ export function createBootstrapResponder(options: BootstrapResponderOptions): Re
         case 'lifecycle.initialize': {
           const payload = message.payload as
             | { protocol?: unknown; apiVersion?: unknown; extensions?: unknown;
-                workspace?: unknown; configuration?: unknown }
+                workspace?: unknown; configuration?: unknown; documents?: unknown }
             | null;
           if (!payload || typeof payload !== 'object'
             || payload.protocol !== RPC_PROTOCOL_VERSION) {
@@ -259,6 +261,13 @@ export function createBootstrapResponder(options: BootstrapResponderOptions): Re
           const workspacePath = typeof payload.workspace === 'string' ? payload.workspace : null;
           configuration = plainRecord(payload.configuration);
           const descriptors = descriptorsFrom(payload.extensions, warn);
+          const documents = Array.isArray(payload.documents)
+            ? payload.documents
+              .filter((entry): entry is Record<string, unknown> => (
+                entry !== null && typeof entry === 'object' && typeof (entry as { uri?: unknown }).uri === 'string'
+              ))
+              .map((entry) => toDocumentState(entry.uri as string, entry))
+            : [];
 
           runtime = createRuntime({
             apiVersion: typeof payload.apiVersion === 'string' ? payload.apiVersion : '0.0.0',
@@ -282,6 +291,7 @@ export function createBootstrapResponder(options: BootstrapResponderOptions): Re
             },
             request: (method, payload, extensionId) => hostRequest(method, payload, extensionId),
             configuration: () => configuration,
+            documents,
             now: options.now,
           });
           runtime.setExtensions(descriptors);
@@ -307,6 +317,45 @@ export function createBootstrapResponder(options: BootstrapResponderOptions): Re
         case 'lifecycle.activate': {
           const result = await requireRuntime().activate(extensionIdOf(message));
           return reply(message, 'response', result);
+        }
+        case 'documents.sync': {
+          // The renderer's view of the buffers, relayed by main. Each kind is
+          // applied by the registry, which is what fires the extension-facing
+          // events; the host never infers a lifecycle it was not told about.
+          const payload = message.payload as
+            | { kind?: unknown; document?: unknown; uri?: unknown }
+            | null;
+          const kind = payload && typeof payload === 'object' ? payload.kind : undefined;
+          const runtime = requireRuntime();
+          const state = plainRecord(payload?.document) as Record<string, unknown>;
+          const uri = typeof payload?.uri === 'string'
+            ? payload.uri
+            : typeof state.uri === 'string' ? state.uri : '';
+
+          if (!uri) {
+            throw new RpcError('INVALID_PAYLOAD', '"documents.sync" requiere una uri.');
+          }
+
+          switch (kind) {
+            case 'open':
+              runtime.documents.open(toDocumentState(uri, state));
+              break;
+            case 'change':
+              runtime.documents.change(uri, toDocumentPatch(state));
+              break;
+            case 'save':
+              runtime.documents.save(uri, toDocumentPatch(state));
+              break;
+            case 'close':
+              runtime.documents.close(uri);
+              break;
+            default:
+              throw new RpcError(
+                'INVALID_PAYLOAD',
+                `"documents.sync" no reconoce el tipo "${String(kind)}".`,
+              );
+          }
+          return reply(message, 'response', { ok: true });
         }
         case 'configuration.update': {
           // Main owns precedence (default < override < user < workspace) and
@@ -360,6 +409,35 @@ export function createBootstrapResponder(options: BootstrapResponderOptions): Re
         : new RpcError('ACTIVATION_FAILED', err instanceof Error ? err.message : String(err)));
     }
   };
+}
+
+/** Full state for an opened document; missing fields take the neutral value
+ *  rather than being guessed from the previous revision. */
+function toDocumentState(uri: string, raw: Record<string, unknown>): {
+  uri: string;
+  languageId: string;
+  version: number;
+  content: string;
+  isDirty: boolean;
+} {
+  return {
+    uri,
+    languageId: typeof raw.languageId === 'string' ? raw.languageId : 'plaintext',
+    version: typeof raw.version === 'number' ? raw.version : 1,
+    content: typeof raw.content === 'string' ? raw.content : '',
+    isDirty: raw.isDirty === true,
+  };
+}
+
+/** Partial patch: only what actually arrived is applied, so a `save` that
+ *  carries no content does not blank the document. */
+function toDocumentPatch(raw: Record<string, unknown>): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  if (typeof raw.languageId === 'string') patch.languageId = raw.languageId;
+  if (typeof raw.version === 'number') patch.version = raw.version;
+  if (typeof raw.content === 'string') patch.content = raw.content;
+  if (typeof raw.isDirty === 'boolean') patch.isDirty = raw.isDirty;
+  return patch;
 }
 
 /** Accepts only a plain object of values; anything else reads as empty

@@ -26,7 +26,7 @@ import {
 import type { editor } from 'monaco-editor';
 import logoUrl from '../assets/dvg-logo.jpg';
 import { lspClient, getLspLanguageId } from '../lsp/client';
-import { attachMonaco as attachExtensionMonaco, isThemeAvailable } from '../extensions/registry';
+import { documentSyncService, attachMonaco as attachExtensionMonaco, isThemeAvailable } from '../extensions/registry';
 import ImageViewer from './ImageViewer';
 import GitDiffEditor from './GitDiffEditor';
 import ExtensionDetailView from './ExtensionDetailView';
@@ -1005,6 +1005,8 @@ function MonacoWrapper() {
         if (tab && getLspLanguageId(tab.path)) {
           lspClient.changeDocument(tab.path, value);
         }
+        // Extensions see every buffer, debounced by the sync service.
+        if (tab?.path) documentSyncService.change(tab.path, value);
       }
     },
     [activeTabId, updateTabContent, activeTab]
@@ -1036,6 +1038,20 @@ function MonacoWrapper() {
         previouslyOpened.delete(oldPath);
       }
     }
+
+    // The Extension Host mirrors every text buffer, not just the ones a
+    // language server understands: an extension may care about any file.
+    // One reconciliation call covers both new and closed tabs.
+    documentSyncService.syncOpenDocuments(
+      openTabs
+        .filter((tab) => !tab.imageDataUrl && !tab.extension && !tab.gitDiff && tab.path)
+        .map((tab) => ({
+          path: tab.path,
+          language: tab.language,
+          content: tab.content,
+          isUnsaved: tab.isUnsaved,
+        })),
+    );
   }, [openTabs]);
 
   if (!activeTab) return <WorkspaceHome />;

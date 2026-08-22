@@ -32,6 +32,8 @@ import type { ExtensionContext, MementoStore } from './extension-context';
 import { createVscodeApi } from './vscode-api/facade';
 import { createFileSystemApi } from './vscode-api/workspace-fs';
 import { Uri } from './vscode-api/primitives';
+import { DocumentRegistry } from './document-registry';
+import type { TextDocumentState } from './vscode-api/text-document';
 import { HostCommandRegistry } from './host-commands';
 import type { CommandBridge } from './host-commands';
 
@@ -70,6 +72,8 @@ export interface ExtensionRuntimeOptions {
    *  synchronously because `workspace.getConfiguration(...).get()` is
    *  synchronous in VS Code and extensions rely on that. */
   configuration?: () => Record<string, unknown>;
+  /** Documents open in the workbench when this generation started. */
+  documents?: TextDocumentState[];
 }
 
 interface LoadedExtension {
@@ -88,6 +92,9 @@ export class ExtensionRuntime {
   private readonly loaded = new Map<string, LoadedExtension>();
   private readonly apis = new Map<string, unknown>();
   private readonly commands: HostCommandRegistry;
+  /** Shared: a document is the same object for every extension, exactly as
+   *  it is the same file. */
+  readonly documents: DocumentRegistry;
   private uninstallHook: (() => void) | null = null;
 
   constructor(options: ExtensionRuntimeOptions) {
@@ -98,6 +105,13 @@ export class ExtensionRuntime {
       register: () => undefined,
       unregister: () => undefined,
     });
+    this.documents = new DocumentRegistry(async (uri) => {
+      if (!options.request) return false;
+      const answer = await options.request('documents.save', { uri }, '') as
+        { saved?: unknown } | null;
+      return answer?.saved === true;
+    });
+    if (options.documents?.length) this.documents.reset(options.documents);
   }
 
   /** Runs a command registered by an extension. This is the main → host
@@ -297,6 +311,7 @@ export class ExtensionRuntime {
     }
     this.uninstallHook?.();
     this.uninstallHook = null;
+    this.documents.dispose();
   }
 
   /** One facade per extension, memoised: the identity behind `Disposable`s
@@ -402,6 +417,7 @@ export class ExtensionRuntime {
    */
   private workspaceApiFor(extensionId: string): Record<string, unknown> {
     const snapshot = () => this.options.configuration?.() ?? {};
+    const registry = this.documents;
     const workspacePath = this.options.workspacePath;
     const folderUri = workspacePath ? Uri.file(workspacePath) : null;
     const folders = folderUri
@@ -409,6 +425,44 @@ export class ExtensionRuntime {
       : undefined;
 
     return {
+      // Documents are workbench state, shared by every extension; what is
+      // per-extension is only the subscription, which its `deactivate`
+      // disposes along with the rest of `context.subscriptions`.
+      get textDocuments() {
+        return registry.textDocuments;
+      },
+      onDidOpenTextDocument: registry.onDidOpenTextDocument,
+      onDidChangeTextDocument: registry.onDidChangeTextDocument,
+      onDidSaveTextDocument: registry.onDidSaveTextDocument,
+      onDidCloseTextDocument: registry.onDidCloseTextDocument,
+
+      openTextDocument: async (target: { fsPath?: string } | string) => {
+        const uri = typeof target === 'string' ? target : target?.fsPath ?? '';
+        if (!uri) {
+          throw new RpcError('INVALID_PAYLOAD', 'openTextDocument requiere una ruta.');
+        }
+        const known = registry.get(uri);
+        if (known) return known;
+        if (!this.options.request) {
+          this.options.reportUnsupportedApi('workspace.openTextDocument', extensionId);
+          throw new RpcError(
+            'UNSUPPORTED_API',
+            'El host no puede abrir documentos sin conexión con Forge.',
+          );
+        }
+        // Not open in the workbench: main reads it from disk. No tab is
+        // opened — an extension must not reorder the user's editor.
+        const answer = await this.options.request(
+          'documents.open',
+          { uri },
+          extensionId,
+        ) as TextDocumentState | null;
+        if (!answer) {
+          throw new RpcError('INVALID_PAYLOAD', `No se pudo abrir "${uri}".`);
+        }
+        return registry.adopt(answer);
+      },
+
       fs: createFileSystemApi((operation, payload) => {
         if (!this.options.request) {
           this.options.reportUnsupportedApi(`workspace.fs.${operation}`, extensionId);

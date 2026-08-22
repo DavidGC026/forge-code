@@ -1074,3 +1074,74 @@ test('a fixture reads and writes inside the workspace, and is refused outside', 
 
   await host.stop();
 });
+
+// ── Documentos de punta a punta (incremento 4.1) ────────────────────────
+
+test('an extension sees the dirty buffer and the whole document lifecycle', async () => {
+  const {
+    DocumentMirror,
+  } = require('../../dist-electron/extensions/application/document-mirror.js');
+
+  const host = createLoadingResponder();
+  const descriptor = hostDescriptor('documents');
+
+  // Main's mirror, wired to the host exactly as the composition root does.
+  const mirror = new DocumentMirror({
+    notifyHost: (event, document) => {
+      void host.request('documents.sync', {
+        kind: event.kind,
+        uri: document?.uri ?? event.uri,
+        document,
+      });
+    },
+  });
+
+  // A file already open when the generation starts is state, not an event.
+  mirror.apply({
+    kind: 'open',
+    document: {
+      uri: '/w/preexistente.txt',
+      languageId: 'plaintext',
+      version: 1,
+      content: 'ya estaba',
+      isDirty: false,
+    },
+  });
+
+  await host.request('lifecycle.initialize', {
+    protocol: 1,
+    apiVersion: '1.90.0',
+    extensions: [descriptor],
+    workspace: '/w',
+    configuration: {},
+    documents: mirror.snapshot(),
+  });
+  await host.request('lifecycle.activate', { id: descriptor.id });
+
+  // Now the user works: opens a file, types, saves, closes.
+  mirror.apply({
+    kind: 'open',
+    document: {
+      uri: '/w/a.txt',
+      languageId: 'plaintext',
+      version: 1,
+      content: 'en disco',
+      isDirty: false,
+    },
+  });
+  mirror.apply({ kind: 'change', uri: '/w/a.txt', version: 2, content: 'sin guardar' });
+  mirror.apply({ kind: 'save', uri: '/w/a.txt', version: 3, content: 'sin guardar' });
+  mirror.apply({ kind: 'close', uri: '/w/a.txt' });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const loaded = require(path.join(HOST_FIXTURES, 'documents', 'out', 'extension.js'));
+  assert.deepEqual(loaded.trace, [
+    'open:/w/a.txt:en disco',
+    'change:/w/a.txt:v2:sin guardar',
+    'save:/w/a.txt:clean',
+    'close:/w/a.txt',
+  ], 'the extension saw the buffer, including the unsaved revision');
+
+  // And the mirror is what answers about content, not the disk.
+  assert.equal(mirror.contentOf('/w/preexistente.txt'), 'ya estaba');
+});

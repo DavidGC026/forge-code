@@ -50,6 +50,14 @@ export interface ExtensionHostInitializePayload {
   /** Effective settings, flattened by key. Sent whole because
    *  `workspace.getConfiguration(...).get()` is synchronous host-side. */
   configuration: Record<string, unknown>;
+  /** Buffers already open when this generation starts. State, not events. */
+  documents: {
+    uri: string;
+    languageId: string;
+    version: number;
+    content: string;
+    isDirty: boolean;
+  }[];
 }
 
 /** What the host answers to the handshake. */

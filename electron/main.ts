@@ -63,6 +63,7 @@ import {
   onSafeModeChanged,
   SafeModeError,
   configureExtensionRemoteFileSystem,
+  syncExtensionDocument,
 } from './extensions';
 import { RpcError } from './extensions/domain/rpc-protocol';
 import {
@@ -2093,6 +2094,12 @@ ipcMain.on('ext:host:message:respond', (_event, id: number, selection: string | 
 // `onLanguage:` is a workbench fact — which language the user is looking at
 // — so the renderer reports it and main decides who that wakes up. Fire and
 // forget: opening a file must not wait on an extension, nor fail with it.
+// The renderer's buffers, mirrored for extensions. `send`, not `invoke`:
+// typing must never wait on the extension subsystem.
+ipcMain.on('ext:documents:sync', (_event, payload: unknown) => {
+  syncExtensionDocument(payload);
+});
+
 ipcMain.on('ext:activate:language', (_event, language: string) => {
   if (typeof language !== 'string' || !language) return;
   void fireExtensionActivation({ kind: 'language', language });

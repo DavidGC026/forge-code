@@ -494,6 +494,22 @@ export type ExtensionCommandResult =
   | { ok: true; result: unknown }
   | { ok: false; error: { code: string; message: string } };
 
+/** One buffer event for the extension host's document mirror. */
+export type DocumentSyncPayload =
+  | {
+      kind: 'open';
+      document: {
+        uri: string;
+        languageId: string;
+        version: number;
+        content: string;
+        isDirty: boolean;
+      };
+    }
+  | { kind: 'change'; uri: string; version: number; content: string; isDirty?: boolean }
+  | { kind: 'save'; uri: string; version?: number; content?: string }
+  | { kind: 'close'; uri: string };
+
 /** Whether Forge is running with every extension inert, and why. */
 export interface SafeModeStatus {
   active: boolean;
@@ -941,6 +957,8 @@ export interface ElectronAPI {
     ) => { dispose: () => void };
     /** Reports the language the user is looking at, for `onLanguage:`. */
     notifyLanguage: (language: string) => void;
+    /** Mirrors an open buffer for `workspace.textDocuments`. */
+    syncDocument: (event: DocumentSyncPayload) => void;
     /** Messages extensions ask Forge to show (`window.show*Message`). */
     onHostMessage: (
       callback: (message: ExtensionHostMessage) => void,
