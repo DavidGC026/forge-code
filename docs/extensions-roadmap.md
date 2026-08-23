@@ -221,7 +221,9 @@ filesystem como puerto: local por Node y remoto por un puente SSH. Incremento
 4.1 añadió el espejo de documentos y `workspace.textDocuments` con sus
 eventos: una extensión ve el buffer del usuario, no el disco. Incremento 4.2
 añadió los editores encima: `activeTextEditor`, selección con sus eventos y
-`showTextDocument` respetando `preserveFocus`. Diseño y
+`showTextDocument` respetando `preserveFocus`. Incremento 4.3 cerró el bucle
+con `WorkspaceEdit`/`applyEdit`: verificación de versión, todo o nada, y un
+solo paso de undo por refactorización. Diseño y
 plan de incrementos 4.0–4.6:
 [extensions-phase4-design.md](./extensions-phase4-design.md) · progreso:
 [extensions-phase4-progress.md](./extensions-phase4-progress.md)
@@ -360,10 +362,10 @@ El Milestone 3 está cerrado: los siete incrementos (3.0–3.6) están hechos y
 el gate de seguridad queda cubierto salvo la integración con un
 `utilityProcess` real, que este entorno no puede ejecutar sin display.
 
-El próximo cambio de código es el **incremento 4.3**: `WorkspaceEdit`,
-`applyEdit` y edit builders con version checks. Cierra el bucle: hasta ahora
-las extensiones observan el trabajo del usuario, y a partir de ahí lo
-modifican — con las versiones del 4.1 haciendo verificable cada edición.
+El próximo cambio de código es el **incremento 4.4**: file watchers y
+`findFiles` con cancelación. El criterio de salida es que un watcher se
+libere al desactivar la extensión, demostrado con una prueba — un watcher
+huérfano es un proceso leyendo disco por una extensión que ya no existe.
 
 Diseño: [extensions-phase3-design.md](./extensions-phase3-design.md).
 Progreso del kernel: [extensions-phase3-progress.md](./extensions-phase3-progress.md).

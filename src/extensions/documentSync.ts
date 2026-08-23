@@ -263,3 +263,61 @@ export function buildEditorLayout(
       : null,
   };
 }
+
+// ── Applying edits off-screen ───────────────────────────────────────────
+
+export interface TextEditPayload {
+  startLine: number;
+  startCharacter: number;
+  endLine: number;
+  endCharacter: number;
+  newText: string;
+}
+
+/**
+ * Applies edits to a buffer that has no Monaco model on screen.
+ *
+ * Same rules main validated with: offsets are resolved against the original
+ * text and applied back-to-front, so every position stays valid. Returns
+ * null when something does not add up, which the caller reports as "not
+ * applied" rather than writing a half-edited buffer.
+ */
+export function applyEditsToText(content: string, edits: TextEditPayload[]): string | null {
+  const starts = [0];
+  for (let index = 0; index < content.length; index += 1) {
+    if (content[index] === '\n') starts.push(index + 1);
+  }
+
+  const offsetAt = (line: number, character: number): number => {
+    const clampedLine = Math.min(Math.max(0, line), starts.length - 1);
+    const start = starts[clampedLine];
+    const nextStart = clampedLine + 1 < starts.length ? starts[clampedLine + 1] : content.length;
+    let lineLength = nextStart - start;
+    if (nextStart > start && content[nextStart - 1] === '\n') {
+      lineLength -= (nextStart >= start + 2 && content[nextStart - 2] === '\r') ? 2 : 1;
+    }
+    return start + Math.min(Math.max(0, character), Math.max(0, lineLength));
+  };
+
+  const resolved = edits.map((edit) => {
+    const a = offsetAt(edit.startLine, edit.startCharacter);
+    const b = offsetAt(edit.endLine, edit.endCharacter);
+    return { start: Math.min(a, b), end: Math.max(a, b), newText: edit.newText };
+  });
+
+  const ordered = resolved
+    .map((edit, index) => ({ edit, index }))
+    .sort((a, b) => (a.edit.start - b.edit.start) || (a.index - b.index))
+    .map((entry) => entry.edit);
+
+  for (let index = 1; index < ordered.length; index += 1) {
+    if (ordered[index].start < ordered[index - 1].end) return null;
+  }
+
+  let result = content;
+  for (let index = ordered.length - 1; index >= 0; index -= 1) {
+    const edit = ordered[index];
+    result = result.slice(0, edit.start) + edit.newText + result.slice(edit.end);
+  }
+  return result;
+}

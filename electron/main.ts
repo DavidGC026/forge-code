@@ -66,6 +66,7 @@ import {
   syncExtensionDocument,
   syncExtensionEditors,
   configureExtensionDocumentReveal,
+  configureExtensionEditApplier,
 } from './extensions';
 import { RpcError } from './extensions/domain/rpc-protocol';
 import {
@@ -2125,6 +2126,31 @@ configureExtensionDocumentReveal((uri, options) => {
       if (pendingReveals.delete(id)) resolve(false);
     }, 10_000).unref?.();
   });
+});
+
+// `workspace.applyEdit` on an open buffer: the renderer owns the text, so it
+// applies the edits (as one undo step) and answers whether it could.
+const pendingEdits = new Map<number, (applied: boolean) => void>();
+let nextEditId = 1;
+
+configureExtensionEditApplier((uri, edits) => {
+  const [win] = BrowserWindow.getAllWindows();
+  if (!win) return Promise.resolve(false);
+  const id = nextEditId++;
+  return new Promise<boolean>((resolve) => {
+    pendingEdits.set(id, resolve);
+    win.webContents.send('ext:editor:applyEdits', { id, uri, edits });
+    setTimeout(() => {
+      if (pendingEdits.delete(id)) resolve(false);
+    }, 10_000).unref?.();
+  });
+});
+
+ipcMain.on('ext:editor:editsApplied', (_event, id: number, applied: boolean) => {
+  const resolve = pendingEdits.get(id);
+  if (!resolve) return;
+  pendingEdits.delete(id);
+  resolve(applied === true);
 });
 
 ipcMain.on('ext:editor:shown', (_event, id: number, shown: boolean) => {

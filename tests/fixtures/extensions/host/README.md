@@ -17,6 +17,7 @@ resultados que el modelo de fallos del diseño §6 distingue:
 | `filesystem` | `workspace.fs`, workspace folders y la política de rutas (Milestone 4.0) |
 | `documents` | `workspace.textDocuments` y los cuatro eventos de documento (4.1) |
 | `editors` | `window.activeTextEditor`, selección y sus eventos (4.2) |
+| `editing` | `WorkspaceEdit` multiarchivo y ediciones solapadas rechazadas (4.3) |
 
 ## Fixtures maliciosas de runtime (gate de seguridad §9)
 

@@ -85,6 +85,7 @@ import {
   parseDocumentSyncEvent,
   type DocumentSyncEvent,
 } from './extensions/application/document-mirror';
+import { WorkspaceEditService } from './extensions/application/workspace-edit-service';
 import {
   WorkspaceTrustService,
   WorkspaceTrustError,
@@ -707,6 +708,9 @@ const extensionHost = new UtilityProcessExtensionHost({
     if (envelope.method === 'window.showMessage') {
       return showExtensionMessage(envelope.payload, envelope.extensionId ?? null);
     }
+    if (envelope.method === 'workspace.applyEdit') {
+      return workspaceEditService.apply(envelope.payload, envelope.extensionId ?? '');
+    }
     if (envelope.method === 'editors.show') {
       const body = envelope.payload as { uri?: unknown; preserveFocus?: unknown } | null;
       const uri = typeof body?.uri === 'string' ? body.uri : '';
@@ -815,6 +819,17 @@ export function syncExtensionEditors(raw: unknown): void {
   });
 }
 
+/** Wires how main asks the renderer to apply edits to an open buffer. */
+let applyEditsInRenderer:
+  | ((uri: string, edits: unknown[]) => Promise<boolean>)
+  | null = null;
+
+export function configureExtensionEditApplier(
+  applier: ((uri: string, edits: unknown[]) => Promise<boolean>) | null,
+): void {
+  applyEditsInRenderer = applier;
+}
+
 /** Wires how main asks the renderer to reveal a document. */
 let showDocumentInRenderer:
   | ((uri: string, options: { preserveFocus: boolean }) => Promise<boolean>)
@@ -916,6 +931,28 @@ async function readFileForExtension(uri: string, extensionId: string): Promise<s
   ) as { data: Uint8Array };
   return Buffer.from(bytes.data).toString('utf8');
 }
+
+// `workspace.applyEdit`. All or nothing: everything is validated —policy,
+// versions, overlaps— before a single character is written.
+const workspaceEditService = new WorkspaceEditService({
+  mirror: documentMirror,
+  authorise: async (uri, extensionId) => {
+    // The same policy as `workspace.fs`, and for the same reason: editing
+    // must not be the way around what the filesystem refuses.
+    await extensionFileSystem.handle(extensionId, 'stat', { uri });
+  },
+  readFile: (uri, extensionId) => readFileForExtension(uri, extensionId),
+  writeFile: async (uri, content, extensionId) => {
+    await extensionFileSystem.handle(extensionId, 'writeFile', {
+      uri,
+      content: Buffer.from(content, 'utf8').toString('base64'),
+    });
+  },
+  applyInRenderer: async (uri, edits) => (
+    applyEditsInRenderer ? applyEditsInRenderer(uri, edits) : false
+  ),
+  log: (message) => console.warn('[forge:ext-host]', message),
+});
 
 // ── window.showMessage ──────────────────────────────────────────────────
 // The host asks, the renderer shows, the user (maybe) picks. Main holds the

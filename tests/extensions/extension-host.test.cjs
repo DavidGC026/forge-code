@@ -1239,3 +1239,108 @@ test('showTextDocument reaches main with preserveFocus, without opening a tab it
   });
   await shown;
 });
+
+// ── Edición multiarchivo de punta a punta (incremento 4.3) ──────────────
+
+test('a refactor across two files applies whole, and a stale version rejects it whole', async () => {
+  const {
+    DocumentMirror,
+  } = require('../../dist-electron/extensions/application/document-mirror.js');
+  const {
+    WorkspaceEditService,
+  } = require('../../dist-electron/extensions/application/workspace-edit-service.js');
+
+  const disk = { '/w/cerrado.ts': 'const viejo = 2;' };
+  const rendererApplied = [];
+  const mirror = new DocumentMirror({});
+  mirror.apply({
+    kind: 'open',
+    document: {
+      uri: '/w/abierto.ts',
+      languageId: 'typescript',
+      version: 3,
+      content: 'const viejo = 1;',
+      isDirty: true,
+    },
+  });
+
+  const edits = new WorkspaceEditService({
+    mirror,
+    authorise: async () => undefined,
+    readFile: async (uri) => disk[uri],
+    writeFile: async (uri, content) => { disk[uri] = content; },
+    applyInRenderer: async (uri, applied) => {
+      rendererApplied.push({ uri, count: applied.length });
+      return true;
+    },
+  });
+
+  const host = createLoadingResponder();
+  const descriptor = hostDescriptor('editing');
+  await host.request('lifecycle.initialize', {
+    protocol: 1,
+    apiVersion: '1.90.0',
+    extensions: [descriptor],
+    workspace: '/w',
+    configuration: {},
+    documents: mirror.snapshot(),
+    editors: { editors: [], activeUri: null },
+  });
+  await host.request('lifecycle.activate', { id: descriptor.id });
+
+  const fixture = require(path.join(HOST_FIXTURES, 'editing', 'out', 'extension.js'));
+
+  // The host talks to main through `hostRequest`; answer its calls as the
+  // composition root would.
+  const serveOutbound = async () => {
+    for (;;) {
+      await new Promise((resolve) => setImmediate(resolve));
+      const outbound = host.lastOutbound();
+      if (!outbound || outbound.answered) return;
+      outbound.answered = true;
+      let payload;
+      if (outbound.method === 'documents.open') {
+        const uri = outbound.payload.uri;
+        payload = mirror.get(uri) ?? {
+          uri,
+          languageId: 'typescript',
+          version: 1,
+          content: disk[uri] ?? '',
+          isDirty: false,
+        };
+      } else if (outbound.method === 'workspace.applyEdit') {
+        payload = await edits.apply(outbound.payload, descriptor.id);
+      } else {
+        payload = {};
+      }
+      host.send({
+        v: 1,
+        gen: 7,
+        id: outbound.id,
+        kind: 'response',
+        method: outbound.method,
+        payload,
+      });
+    }
+  };
+
+  const running = fixture.renameAcrossFiles(['/w/abierto.ts', '/w/cerrado.ts']);
+  await serveOutbound();
+  assert.equal(await running, true, 'the refactor applied');
+
+  assert.equal(disk['/w/cerrado.ts'], 'const nuevo = 2;', 'the closed file was rewritten');
+  assert.deepEqual(rendererApplied, [{ uri: '/w/abierto.ts', count: 1 }], 'one undo step');
+
+  // Now the user types: the version moves, and the same edit is refused.
+  mirror.apply({ kind: 'change', uri: '/w/abierto.ts', version: 9, content: 'const viejo = 1;' });
+  const stale = await edits.apply({
+    files: [{
+      uri: '/w/abierto.ts',
+      version: 3,
+      edits: [{ startLine: 0, startCharacter: 6, endLine: 0, endCharacter: 11, newText: 'nuevo' }],
+    }],
+  }, descriptor.id);
+
+  assert.equal(stale.applied, false);
+  assert.match(stale.reason, /cambió mientras/);
+});

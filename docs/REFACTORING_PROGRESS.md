@@ -221,6 +221,12 @@ líneas): `electron/main.ts`, `ExplorerPanel.tsx`, `EditorArea.tsx`,
   respeta `preserveFocus`. El layout se publica entero y deduplicado (el
   caret cambia en cada pulsación) y un editor sin su documento se descarta en
   vez de inventarse.
+- **Extensiones Milestone 4.3**: `WorkspaceEdit` y `applyEdit` con
+  verificación de versión y semántica todo-o-nada. Las ediciones se resuelven
+  contra el texto original y se aplican de atrás hacia adelante; las
+  solapadas se rechazan; un archivo abierto se edita en su buffer en un solo
+  paso de undo y uno cerrado en disco. `editor.edit()` comparte camino, para
+  que no haya dos formas de saltarse el version check.
 
 Actualmente `store.ts` ha delegado Layout, Terminal, Git, Remote y Extensiones a
 slices específicos. Siguen inline: workspace, tabs, editor, IA, Live Server,

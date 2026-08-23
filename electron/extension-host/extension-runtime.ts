@@ -31,6 +31,7 @@ import { createExtensionContext, disposeSubscriptions } from './extension-contex
 import type { ExtensionContext, MementoStore } from './extension-context';
 import { createVscodeApi } from './vscode-api/facade';
 import { createFileSystemApi } from './vscode-api/workspace-fs';
+import { WorkspaceEdit, TextEditorEdit, serializeEdit } from './vscode-api/workspace-edit';
 import { Uri } from './vscode-api/primitives';
 import { DocumentRegistry } from './document-registry';
 import { EditorRegistry } from './editor-registry';
@@ -117,7 +118,17 @@ export class ExtensionRuntime {
       return answer?.saved === true;
     });
     if (options.documents?.length) this.documents.reset(options.documents);
-    this.editors = new EditorRegistry(this.documents);
+    this.editors = new EditorRegistry(this.documents, {
+      // `editor.edit()` and `workspace.applyEdit` share one path, so the
+      // version check cannot be skipped through the shorter one.
+      applyEdit: async (edit) => {
+        if (!options.request) return false;
+        const payload = edit.serialize((uri) => this.documents.get(uri)?.version ?? null);
+        const answer = await options.request('workspace.applyEdit', payload, '') as
+          { applied?: unknown } | null;
+        return answer?.applied === true;
+      },
+    });
     if (options.editors) {
       this.editors.sync(options.editors.editors, options.editors.activeUri);
     }
@@ -515,6 +526,31 @@ export class ExtensionRuntime {
           throw new RpcError('INVALID_PAYLOAD', `No se pudo abrir "${uri}".`);
         }
         return registry.adopt(answer);
+      },
+
+      applyEdit: async (edit: WorkspaceEdit) => {
+        if (!(edit instanceof WorkspaceEdit)) {
+          throw new RpcError('INVALID_PAYLOAD', 'applyEdit requiere un WorkspaceEdit.');
+        }
+        if (edit.size === 0) return true;
+        if (!this.options.request) {
+          this.options.reportUnsupportedApi('workspace.applyEdit', extensionId);
+          throw new RpcError(
+            'UNSUPPORTED_API',
+            'El host no puede aplicar ediciones sin conexión con Forge.',
+          );
+        }
+        // The version travels with each file: it is what lets main refuse an
+        // edit computed against text the user has since changed.
+        const payload = edit.serialize(
+          (uri) => registry.get(uri)?.version ?? null,
+        );
+        const answer = await this.options.request('workspace.applyEdit', payload, extensionId) as
+          { applied?: unknown; reason?: unknown } | null;
+        if (answer?.applied !== true && typeof answer?.reason === 'string') {
+          this.options.log('info', `edición rechazada: ${answer.reason}`, extensionId);
+        }
+        return answer?.applied === true;
       },
 
       fs: createFileSystemApi((operation, payload) => {

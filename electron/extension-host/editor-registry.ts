@@ -11,12 +11,13 @@
  *   invented, because `editor.document` must be the same object extensions
  *   got from `workspace.textDocuments`.
  *
- * Editing through `editor.edit()` is not here: it belongs with the rest of
- * the edit machinery (4.3), and a half-implemented edit builder would be
- * worse than an honest `UnsupportedApiError`.
+ * `editor.edit()` collects its edits and hands them to the same path as
+ * `workspace.applyEdit`, which is what makes them one undo step: two routes
+ * into the buffer would mean two ways for a version check to be skipped.
  */
 import { EventEmitter, Selection, Range } from './vscode-api/primitives';
 import type { Event } from './vscode-api/primitives';
+import { TextEditorEdit, WorkspaceEdit } from './vscode-api/workspace-edit';
 import type { DocumentRegistry } from './document-registry';
 import type { TextDocument } from './vscode-api/text-document';
 
@@ -42,8 +43,9 @@ export interface TextEditorLike {
   selections: Selection[];
   visibleRanges: Range[];
   viewColumn: number;
-  /** Present so feature detection works; the real thing lands in 4.3. */
-  edit?: unknown;
+  /** `editor.edit(builder => …)`: collects the edits and applies them as
+   *  one, through the same path as `workspace.applyEdit`. */
+  edit(callback: (builder: TextEditorEdit) => void): Promise<boolean>;
 }
 
 export interface TextEditorSelectionChangeEvent {
@@ -54,6 +56,12 @@ export interface TextEditorSelectionChangeEvent {
   kind: undefined;
 }
 
+export interface EditorRegistryOptions {
+  /** Applies a set of edits to one document, as `workspace.applyEdit` does.
+   *  Injected so the registry stays free of transport. */
+  applyEdit?: (edit: WorkspaceEdit) => Promise<boolean>;
+}
+
 export class EditorRegistry {
   private readonly editors = new Map<string, TextEditorLike>();
   private activeUri: string | null = null;
@@ -61,7 +69,29 @@ export class EditorRegistry {
   private readonly onSelection = new EventEmitter<TextEditorSelectionChangeEvent>();
   private readonly onVisible = new EventEmitter<readonly TextEditorLike[]>();
 
-  constructor(private readonly documents: DocumentRegistry) {}
+  private readonly documents: DocumentRegistry;
+  private readonly options: EditorRegistryOptions;
+
+  constructor(documents: DocumentRegistry, options: EditorRegistryOptions = {}) {
+    this.documents = documents;
+    this.options = options;
+  }
+
+  /** The `edit()` an editor exposes. The callback runs synchronously and
+   *  everything it collected is applied as one operation — that is what
+   *  makes it a single undo step for the user. */
+  private editFor(uri: string): (callback: (builder: TextEditorEdit) => void) => Promise<boolean> {
+    return async (callback) => {
+      const builder = new TextEditorEdit();
+      callback(builder);
+      const edits = builder.close();
+      if (edits.length === 0) return true;
+      if (!this.options.applyEdit) return false;
+      const edit = new WorkspaceEdit();
+      edit.set(uri, edits);
+      return this.options.applyEdit(edit);
+    };
+  }
 
   get visibleTextEditors(): TextEditorLike[] {
     return [...this.editors.values()];
@@ -113,6 +143,7 @@ export class EditorRegistry {
           selections,
           visibleRanges,
           viewColumn: state.viewColumn,
+          edit: this.editFor(state.uri),
         });
         visibleChanged = true;
         continue;

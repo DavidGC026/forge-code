@@ -32,7 +32,7 @@ import {
   attachMonaco as attachExtensionMonaco,
   isThemeAvailable,
 } from '../extensions/registry';
-import { buildEditorLayout } from '../extensions/documentSync';
+import { applyEditsToText, buildEditorLayout } from '../extensions/documentSync';
 import ImageViewer from './ImageViewer';
 import GitDiffEditor from './GitDiffEditor';
 import ExtensionDetailView from './ExtensionDetailView';
@@ -1105,6 +1105,59 @@ function MonacoWrapper() {
   useEffect(() => {
     publishEditorLayout();
   }, [activeTabId, publishEditorLayout]);
+
+  // `workspace.applyEdit` on an open buffer. Monaco applies the whole set in
+  // one `executeEdits`, which is what makes it a single undo step for the
+  // user: an extension's refactor is taken back with one Ctrl+Z, not one per
+  // touched line.
+  useEffect(() => {
+    const api = window.electronAPI?.ext;
+    if (!api?.onApplyEdits) return;
+    const subscription = api.onApplyEdits((request) => {
+      let applied = false;
+      try {
+        const editorInstance = editorRef.current;
+        const model = editorInstance?.getModel();
+        const tab = openTabsRef.current.find((entry) => entry.path === request.uri);
+
+        if (model && tab && tab.id === activeTabIdRef.current) {
+          // The visible buffer: edit through Monaco so undo, decorations and
+          // the caret all behave as if the user had typed it.
+          model.pushStackElement();
+          model.pushEditOperations(
+            [],
+            request.edits.map((edit) => ({
+              range: {
+                startLineNumber: edit.startLine + 1,
+                startColumn: edit.startCharacter + 1,
+                endLineNumber: edit.endLine + 1,
+                endColumn: edit.endCharacter + 1,
+              },
+              text: edit.newText,
+            })),
+            () => null,
+          );
+          model.pushStackElement();
+          updateTabContent(tab.id, model.getValue());
+          applied = true;
+        } else if (tab) {
+          // Open but not on screen: there is no Monaco model to edit, so the
+          // buffer is updated directly and stays dirty, exactly as if the
+          // user had typed into it.
+          const next = applyEditsToText(tab.content, request.edits);
+          if (next !== null) {
+            updateTabContent(tab.id, next);
+            applied = true;
+          }
+        }
+      } catch (err) {
+        console.error('[forge:ext] no se pudieron aplicar las ediciones:', err);
+        applied = false;
+      }
+      api.respondApplyEdits?.(request.id, applied);
+    });
+    return () => subscription.dispose();
+  }, [updateTabContent]);
 
   // `window.showTextDocument`: main relays the request and waits for the
   // answer, so the extension's promise resolves when the tab really exists.

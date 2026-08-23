@@ -510,6 +510,19 @@ export interface EditorSyncPayload {
   activeUri: string | null;
 }
 
+/** A request from an extension to edit an open buffer. */
+export interface EditorApplyEditsRequest {
+  id: number;
+  uri: string;
+  edits: {
+    startLine: number;
+    startCharacter: number;
+    endLine: number;
+    endCharacter: number;
+    newText: string;
+  }[];
+}
+
 /** A request from an extension to reveal a document. */
 export interface EditorShowRequest {
   id: number;
@@ -990,6 +1003,12 @@ export interface ElectronAPI {
     ) => { dispose: () => void };
     /** Answers one, with whether the document ended up visible. */
     respondShowDocument: (id: number, shown: boolean) => void;
+    /** Extensions editing an open buffer (`applyEdit`). */
+    onApplyEdits: (
+      callback: (request: EditorApplyEditsRequest) => void,
+    ) => { dispose: () => void };
+    /** Answers one, with whether the edits were applied. */
+    respondApplyEdits: (id: number, applied: boolean) => void;
     /** Messages extensions ask Forge to show (`window.show*Message`). */
     onHostMessage: (
       callback: (message: ExtensionHostMessage) => void,

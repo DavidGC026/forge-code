@@ -195,9 +195,71 @@ texto bajo la selección y siguiendo el foco por el protocolo, y
   de que el editor exista hace que la línea siguiente de la extensión —leer
   `activeTextEditor`— falle de forma intermitente.
 
+## Incremento 4.3 — `WorkspaceEdit`, `applyEdit` y version checks
+
+Completado (2026-08-22). Criterio de salida del diseño §7: *«Edición
+multiarchivo aplicada en un undo; versión desfasada rechaza entera»*. Es el
+incremento que cierra el bucle: hasta aquí las extensiones observaban el
+trabajo del usuario, y desde aquí lo modifican.
+
+- **Aplicación de ediciones como cómputo puro** (`domain/text-edits.ts`): las
+  posiciones se resuelven contra el texto **original** y se aplican de atrás
+  hacia adelante, que es lo que mantiene válidas unas coordenadas calculadas
+  sobre una revisión mientras el texto se desplaza. Las ediciones que se
+  **solapan se rechazan, nunca se fusionan**: dos ediciones sobre el mismo
+  tramo no tienen resultado definido, y elegir una en silencio corrompería
+  una refactorización de forma invisible hasta mucho después. Las que se
+  tocan (un insert al final de un replace) sí son válidas, y dos inserts en
+  el mismo punto respetan el orden en que se declararon.
+- **Todo o nada** (`WorkspaceEditService`): primero se valida el conjunto
+  entero —política de rutas, versiones, solapes— y sólo después se escribe
+  algo. Aplicar la mitad de una refactorización multiarchivo deja al usuario
+  con código que no compila y sin forma de saber qué pasó.
+- **El version check es el motivo de que el 4.1 hiciera viajar versiones.**
+  Si el usuario escribió mientras la extensión pensaba, la edición se rechaza
+  con la versión que se esperaba y la que hay. Un `version: null` salta la
+  comprobación, como VS Code permite para archivos que no estaban abiertos.
+- **Un archivo abierto se edita en su buffer**, en una sola operación de
+  Monaco (`pushStackElement` a ambos lados), así que el usuario deshace la
+  refactorización entera con un Ctrl+Z. Uno cerrado se escribe en disco por
+  el mismo puerto de filesystem que todo lo demás, con la misma política.
+- **Un límite declarado, no escondido**: entre el editor y el disco no hay
+  transacción. Si una escritura falla después de que otra haya tenido éxito,
+  se reporta qué se aplicó en vez de fingir atomicidad que no existe.
+- **`editor.edit()` y `workspace.applyEdit` comparten camino.** Dos rutas
+  hacia el buffer significarían dos formas de saltarse el version check.
+- **Operaciones de archivo** (`createFile`, `deleteFile`, `renameFile`)
+  **lanzan** y remiten a `workspace.fs`, en vez de recogerse y descartarse en
+  silencio, que dejaría a la extensión creyendo que renombró algo.
+- El renderer aplica con la misma aritmética que main validó, y hay una
+  prueba que compara ambas implementaciones sobre el mismo caso: una
+  divergencia ahí escribiría en el buffer algo distinto de lo aprobado.
+
+Pruebas añadidas (26 casos; la suite pasa de 347 a 373 tests):
+`workspace-edit.test.cjs` (25: aplicación pura con sus reglas de orden,
+solape, contacto, rango invertido, clamp y multilínea; equivalencia entre las
+dos implementaciones; servicio con edición multiarchivo abierta+cerrada,
+versión desfasada que no toca nada, solape que aborta antes de escribir, ruta
+fuera de política, `version: null`, renderer que falla reportando lo hecho,
+payload malformado y edición vacía; y los contenedores del host) y
+`extension-host.test.cjs` (+1: la fixture `editing` renombrando en dos
+archivos por el protocolo completo, y el mismo cambio rechazado tras teclear
+el usuario).
+
+### Decisiones del incremento 4.3
+
+- **Validar entero, luego aplicar.** Es lo que convierte «todo o nada» en una
+  propiedad del código y no en una intención.
+- **El solape se rechaza.** Cualquier otra política produce resultados que
+  dependen del orden interno, y eso es indistinguible de un bug aleatorio.
+- **Un solo camino hacia el buffer.** `editor.edit()` no es un atajo: pasa
+  por la misma verificación de versión.
+- **La falta de transacción se dice.** Entre disco y editor no la hay;
+  reportar qué se aplicó es más útil que un `false` que oculta el estado.
+
 ## Próximo incremento
 
-4.3 — `WorkspaceEdit`, `applyEdit` y edit builders con version checks. Es el
-incremento que cierra el bucle: hasta ahora las extensiones **observan** el
-trabajo del usuario; a partir de ahí lo **modifican**, y las versiones que el
-4.1 dejó viajando son lo que hace verificable cada edición.
+4.4 — file watchers y `findFiles` con cancelación. El criterio de salida es
+que un watcher se libere al desactivar la extensión, demostrado con una
+prueba: un watcher huérfano es un proceso leyendo disco por una extensión que
+ya no existe.
