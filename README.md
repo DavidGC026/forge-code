@@ -25,12 +25,13 @@ compatibilidad de datos: [brand-and-rename.md](./docs/brand-and-rename.md).
 - Los CLIs de los agentes de terminal (`codex`, `claude`, `cursor-agent`,
   `agy`) son opcionales: Forge Code los lanza si existen
 
-La carpeta de trabajo se llama `forge-code` (antes `editor-app`). El
-nombre del repositorio remoto puede seguir siendo `editor-app`; el
-nombre local es independiente. Tras clonar en `forge-code`, entra en
-ella y prepara el módulo nativo `node-pty`:
+La carpeta de trabajo y el repositorio se llaman `forge-code` (antes
+`editor-app`). Código en [GitHub](https://github.com/DavidGC026/forge-code)
+y copia privada en [Git dvguzman](https://git.dvguzman.com/DavidGC026/forge-code).
+Tras clonar, entra en la carpeta y prepara el módulo nativo `node-pty`:
 
 ```bash
+git clone git@github.com:DavidGC026/forge-code.git
 cd forge-code
 pnpm install
 pnpm rebuild:native
@@ -51,6 +52,8 @@ PTY no arranca, vuelve a ejecutar `rebuild:native`.
 
 No hay tests del renderer, de Git, de LSP ni de SSH. La única suite es
 la de extensiones.
+
+Repositorios, publicación y descargas: [repositories-and-releases.md](./docs/repositories-and-releases.md).
 
 ## Empaquetado
 

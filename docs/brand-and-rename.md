@@ -66,6 +66,8 @@ workspaces guardados que apunten a la ruta absoluta anterior deben abrir
 la carpeta nueva; si este repositorio era el último workspace, vuelve a
 seleccionarlo con **Abrir carpeta**.
 
-El remoto Git conserva su dirección real hasta que el repositorio remoto
-se renombre por separado. Cambiar el nombre de la carpeta local o del
-paquete no requiere cambiar `git remote`.
+El 2026-10-31 también se renombró el repositorio de GitHub a
+`DavidGC026/forge-code`, conservando su historial. Se creó la copia privada
+`DavidGC026/forge-code` en Git dvguzman. El remoto `origin` apunta a GitHub
+y `gitea` a completa-1 por Tailscale. Ver
+[repositorios y publicaciones](./repositories-and-releases.md).

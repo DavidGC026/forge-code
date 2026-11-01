@@ -11,6 +11,7 @@ extensiones. El mapa del editor (no el de extensiones) está en
 | Documento | Para qué sirve |
 | --- | --- |
 | [app-architecture.md](./app-architecture.md) | Procesos main/preload/renderer, store, IPC, workbench y `.forge/`. |
+| [repositories-and-releases.md](./repositories-and-releases.md) | Remotos GitHub/Gitea, publicación de main y AppImage con SHA-256. |
 | [brand-and-rename.md](./brand-and-rename.md) | Identidad Forge Code, carpeta local y conservación de perfiles y configuración. |
 | [workbench-design.md](./workbench-design.md) | Diseño del workbench, jerarquía visual y decisiones de interacción. |
 | [CODING_GUIDELINES.md](./CODING_GUIDELINES.md) | Reglas de arquitectura y estilo (límites de tamaño, slices, anti-monolitos). |
