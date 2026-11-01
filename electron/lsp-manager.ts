@@ -192,7 +192,7 @@ export class LspManager {
     try {
       const initResult = await this.request('initialize', {
         processId: process.pid,
-        clientInfo: { name: 'forge', version: '1.0.0' },
+        clientInfo: { name: 'Forge Code', version: '1.0.0' },
         rootUri,
         rootPath: workspacePath,
         workspaceFolders: [{ uri: rootUri, name: path.basename(workspacePath) || 'workspace' }],

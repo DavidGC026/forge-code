@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
-import { Minus, Square, X } from 'lucide-react';
+import { Minus, Search, Square, X } from 'lucide-react';
 import type { SidebarPanel } from '../types';
-import logoUrl from '../assets/dvg-logo.jpg';
+import WorkbenchHelp from './WorkbenchHelp';
 
 type MenuId = 'file' | 'edit' | 'view' | 'help';
 
@@ -56,7 +56,7 @@ function MenuItem({
       className="w-full flex items-center justify-between gap-4 px-3 py-1.5 text-left text-[12px] text-forge-text-menu hover:bg-forge-accent/10 hover:text-forge-accent transition-colors"
     >
       <span>{label}</span>
-      {shortcut && <span className="text-[10px] text-forge-text/45">{shortcut}</span>}
+      {shortcut && <span className="text-[10px] text-forge-text-dim">{shortcut}</span>}
     </button>
   );
 }
@@ -81,6 +81,7 @@ export default function TitleBar() {
   const zoomIn = useStore((s) => s.zoomIn);
   const zoomOut = useStore((s) => s.zoomOut);
   const resetZoom = useStore((s) => s.resetZoom);
+  const [helpMode, setHelpMode] = useState<'about' | 'shortcuts' | null>(null);
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
 
   const handleMinimize = () => window.electronAPI?.minimize();
@@ -96,124 +97,118 @@ export default function TitleBar() {
   const edit = window.electronAPI?.edit;
 
   return (
+    <>
     <div className="h-[32px] bg-forge-titlebar flex items-center justify-between select-none drag-region border-b border-forge-border/40 relative">
       {/* Left: Logo + App name + Menu */}
-      <div className="flex items-center h-full no-drag">
-        {/* Logo + DVG */}
-        <div className="flex items-center gap-2 px-3 h-full">
-          <img src={logoUrl} alt="DVG" className="h-[20px] w-auto object-contain" />
-          <span className="text-[13px] font-semibold text-forge-accent tracking-wide">DVG</span>
+      <div className="flex items-center h-full no-drag shrink-0">
+        {/* Forge Code identity */}
+        <div className="flex items-center gap-2 px-3 h-full shrink-0">
+          <span className="forge-brand-mark text-forge-gold" aria-hidden="true"><span /><span /><span /></span>
+          <span className="text-[12px] font-semibold text-forge-text-strong tracking-[-0.02em] whitespace-nowrap">Forge <span className="font-normal text-forge-text-dim">Code</span></span>
         </div>
 
         {/* Menu Items */}
-        <div className="flex items-center h-full text-[13px] ml-1">
+        <div className="flex items-center h-full text-[12px] ml-1">
           <div className="relative h-full">
             <button
               onClick={() => setOpenMenu((cur) => cur === 'file' ? null : 'file')}
-              className="px-3 h-full text-forge-text hover:text-forge-text-strong hover:bg-white/5 transition-colors"
+              aria-expanded={openMenu === 'file'} aria-haspopup="true"
+              className="px-2 h-full text-forge-text hover:text-forge-text-strong hover:bg-white/5 transition-colors"
             >
-              File
+              Archivo
             </button>
             {openMenu === 'file' && (
               <MenuDropdown onClose={closeMenu}>
                 <MenuItem label="Nueva ventana" onClick={() => { window.electronAPI?.newWindow(); closeMenu(); }} />
                 <MenuDivider />
-                <MenuItem label="Open Folder..." onClick={() => { void openFolder(); closeMenu(); }} />
-                <MenuItem label="Open Remote SSH..." onClick={() => { void openRemoteWorkspace(); closeMenu(); }} />
-                <MenuItem label="Go to File..." shortcut="Ctrl+P" onClick={() => { setQuickOpenOpen(true); closeMenu(); }} />
-                <MenuItem label="Save" shortcut="Ctrl+S" onClick={() => { void saveFile(); closeMenu(); }} />
+                <MenuItem label="Abrir carpeta…" onClick={() => { void openFolder(); closeMenu(); }} />
+                <MenuItem label="Conectar por SSH…" onClick={() => { void openRemoteWorkspace(); closeMenu(); }} />
+                <MenuItem label="Buscar archivo…" shortcut="Ctrl+P" onClick={() => { setQuickOpenOpen(true); closeMenu(); }} />
+                <MenuItem label="Guardar" shortcut="Ctrl+S" onClick={() => { void saveFile(); closeMenu(); }} />
                 <MenuDivider />
-                <MenuItem label="Close Folder" onClick={() => { closeWorkspace(); closeMenu(); }} />
+                <MenuItem label="Cerrar carpeta" onClick={() => { closeWorkspace(); closeMenu(); }} />
               </MenuDropdown>
             )}
           </div>
           <div className="relative h-full">
             <button
               onClick={() => setOpenMenu((cur) => cur === 'edit' ? null : 'edit')}
-              className="px-3 h-full text-forge-text hover:text-forge-text-strong hover:bg-white/5 transition-colors"
+              aria-expanded={openMenu === 'edit'} aria-haspopup="true"
+              className="px-2 h-full text-forge-text hover:text-forge-text-strong hover:bg-white/5 transition-colors"
             >
-              Edit
+              Editar
             </button>
             {openMenu === 'edit' && (
               <MenuDropdown onClose={closeMenu}>
-                <MenuItem label="Undo" shortcut="Ctrl+Z" onClick={() => { edit?.undo(); closeMenu(); }} />
-                <MenuItem label="Redo" shortcut="Ctrl+Y" onClick={() => { edit?.redo(); closeMenu(); }} />
+                <MenuItem label="Deshacer" shortcut="Ctrl+Z" onClick={() => { edit?.undo(); closeMenu(); }} />
+                <MenuItem label="Rehacer" shortcut="Ctrl+Y" onClick={() => { edit?.redo(); closeMenu(); }} />
                 <MenuDivider />
-                <MenuItem label="Cut" shortcut="Ctrl+X" onClick={() => { edit?.cut(); closeMenu(); }} />
-                <MenuItem label="Copy" shortcut="Ctrl+C" onClick={() => { edit?.copy(); closeMenu(); }} />
-                <MenuItem label="Paste" shortcut="Ctrl+V" onClick={() => { edit?.paste(); closeMenu(); }} />
+                <MenuItem label="Cortar" shortcut="Ctrl+X" onClick={() => { edit?.cut(); closeMenu(); }} />
+                <MenuItem label="Copiar" shortcut="Ctrl+C" onClick={() => { edit?.copy(); closeMenu(); }} />
+                <MenuItem label="Pegar" shortcut="Ctrl+V" onClick={() => { edit?.paste(); closeMenu(); }} />
                 <MenuDivider />
-                <MenuItem label="Select All" shortcut="Ctrl+A" onClick={() => { edit?.selectAll(); closeMenu(); }} />
+                <MenuItem label="Seleccionar todo" shortcut="Ctrl+A" onClick={() => { edit?.selectAll(); closeMenu(); }} />
               </MenuDropdown>
             )}
           </div>
           <div className="relative h-full">
             <button
               onClick={() => setOpenMenu((cur) => cur === 'view' ? null : 'view')}
-              className="px-3 h-full text-forge-text hover:text-forge-text-strong hover:bg-white/5 transition-colors"
+              aria-expanded={openMenu === 'view'} aria-haspopup="true"
+              className="px-2 h-full text-forge-text hover:text-forge-text-strong hover:bg-white/5 transition-colors"
             >
-              View
+              Ver
             </button>
             {openMenu === 'view' && (
               <MenuDropdown onClose={closeMenu}>
-                <MenuItem label="Explorer" onClick={() => pickPanel('explorer')} />
-                <MenuItem label="Search" onClick={() => pickPanel('search')} />
-                <MenuItem label="Source Control" onClick={() => pickPanel('git')} />
-                <MenuItem label="Run and Debug" onClick={() => pickPanel('debug')} />
-                <MenuItem label="Extensions" onClick={() => pickPanel('extensions')} />
+                <MenuItem label="Explorador" onClick={() => pickPanel('explorer')} />
+                <MenuItem label="Búsqueda" onClick={() => pickPanel('search')} />
+                <MenuItem label="Control de versiones" onClick={() => pickPanel('git')} />
+                <MenuItem label="Ejecutar" onClick={() => pickPanel('debug')} />
+                <MenuItem label="Extensiones" onClick={() => pickPanel('extensions')} />
                 <MenuDivider />
-                <MenuItem label="Toggle Sidebar" shortcut="Ctrl+B" onClick={() => { toggleSidebar(); closeMenu(); }} />
-                <MenuItem label="Toggle Panel" shortcut="Ctrl+`" onClick={() => { togglePanel(); closeMenu(); }} />
+                <MenuItem label="Mostrar u ocultar barra lateral" shortcut="Ctrl+B" onClick={() => { toggleSidebar(); closeMenu(); }} />
+                <MenuItem label="Mostrar u ocultar panel" shortcut="Ctrl+`" onClick={() => { togglePanel(); closeMenu(); }} />
                 <MenuItem label="Terminal" onClick={() => { setBottomTab('terminal'); closeMenu(); }} />
-                <MenuItem label="Problems" onClick={() => { setBottomTab('problems'); closeMenu(); }} />
-                <MenuItem label="AI Panel" onClick={() => { toggleAIPanel(); closeMenu(); }} />
+                <MenuItem label="Problemas" onClick={() => { setBottomTab('problems'); closeMenu(); }} />
+                <MenuItem label="Asistente IA" onClick={() => { toggleAIPanel(); closeMenu(); }} />
                 <MenuDivider />
-                <MenuItem label="Zoom In" shortcut="Ctrl+=" onClick={() => { zoomIn(); closeMenu(); }} />
-                <MenuItem label="Zoom Out" shortcut="Ctrl+-" onClick={() => { zoomOut(); closeMenu(); }} />
-                <MenuItem label="Reset Zoom" shortcut="Ctrl+0" onClick={() => { resetZoom(); closeMenu(); }} />
+                <MenuItem label="Aumentar fuente" shortcut="Ctrl+=" onClick={() => { zoomIn(); closeMenu(); }} />
+                <MenuItem label="Reducir fuente" shortcut="Ctrl+-" onClick={() => { zoomOut(); closeMenu(); }} />
+                <MenuItem label="Restablecer fuente" shortcut="Ctrl+0" onClick={() => { resetZoom(); closeMenu(); }} />
               </MenuDropdown>
             )}
           </div>
           <div className="relative h-full">
             <button
               onClick={() => setOpenMenu((cur) => cur === 'help' ? null : 'help')}
-              className="px-3 h-full text-forge-text hover:text-forge-text-strong hover:bg-white/5 transition-colors"
+              aria-expanded={openMenu === 'help'} aria-haspopup="true" data-help-menu
+              className="px-2 h-full text-forge-text hover:text-forge-text-strong hover:bg-white/5 transition-colors"
             >
-              Help
+              Ayuda
             </button>
             {openMenu === 'help' && (
               <MenuDropdown onClose={closeMenu}>
                 <MenuItem
-                  label="Command Palette"
+                  label="Paleta de comandos"
                   shortcut="Ctrl+Shift+P"
                   onClick={() => { setCommandPaletteOpen(true); closeMenu(); }}
                 />
                 <MenuItem
-                  label="Keyboard Shortcuts"
+                  label="Atajos de teclado"
                   onClick={() => {
-                    window.alert([
-                      'DVG shortcuts',
-                      '',
-                      'Ctrl+Shift+P  Command Palette',
-                      'Ctrl+P        Quick Open',
-                      'Ctrl+S        Save',
-                      'Ctrl+B        Toggle Sidebar',
-                      'Ctrl+`        Toggle Panel',
-                      'Ctrl+=        Zoom In',
-                      'Ctrl+-        Zoom Out',
-                      'Ctrl+0        Reset Zoom',
-                    ].join('\n'));
+                    setHelpMode('shortcuts');
                     closeMenu();
                   }}
                 />
                 <MenuDivider />
-                <MenuItem label="Show Problems" onClick={() => { setBottomTab('problems'); closeMenu(); }} />
-                <MenuItem label="Show Output" onClick={() => { setBottomTab('output'); closeMenu(); }} />
+                <MenuItem label="Ver problemas" onClick={() => { setBottomTab('problems'); closeMenu(); }} />
+                <MenuItem label="Ver salida" onClick={() => { setBottomTab('output'); closeMenu(); }} />
                 <MenuDivider />
                 <MenuItem
-                  label="About DVG"
+                  label="Acerca de Forge Code"
                   onClick={() => {
-                    window.alert('DVG\nModern Electron code editor');
+                    setHelpMode('about');
                     closeMenu();
                   }}
                 />
@@ -223,32 +218,36 @@ export default function TitleBar() {
         </div>
       </div>
 
-      {/* Center: Workspace title */}
-      <div className="absolute left-1/2 -translate-x-1/2 text-[12px] text-forge-text/70 pointer-events-none">
-        {workspaceName ? `${workspaceName} — DVG` : 'DVG'}
-      </div>
+      <button
+        className="no-drag hidden xl:flex absolute left-1/2 -translate-x-1/2 items-center justify-between gap-5 w-[min(30vw,380px)] h-[23px] px-2 rounded border border-forge-border bg-white/[0.025] text-[11px] text-forge-text-dim hover:bg-white/[0.05]"
+        onClick={() => setCommandPaletteOpen(true)} title="Paleta de comandos (Ctrl+Shift+P)" aria-label="Abrir paleta de comandos"
+      >
+        <span className="flex items-center gap-2 min-w-0"><Search size={12} className="shrink-0" /><span className="truncate">{workspaceName || 'Buscar un comando…'}</span></span><span className="shrink-0 text-[9px]">Ctrl+Shift+P</span>
+      </button>
 
       {/* Right: Window Controls */}
-      <div className="flex items-center h-full no-drag">
+      <div className="flex items-center h-full no-drag shrink-0">
         <button
-          onClick={handleMinimize}
-          className="w-[46px] h-full flex items-center justify-center hover:bg-white/10 transition-colors"
+          onClick={handleMinimize} aria-label="Minimizar ventana"
+          className="w-[38px] h-full flex items-center justify-center hover:bg-white/10 transition-colors"
         >
           <Minus size={16} className="text-forge-text" />
         </button>
         <button
-          onClick={handleMaximize}
-          className="w-[46px] h-full flex items-center justify-center hover:bg-white/10 transition-colors"
+          onClick={handleMaximize} aria-label="Maximizar o restaurar ventana"
+          className="w-[38px] h-full flex items-center justify-center hover:bg-white/10 transition-colors"
         >
           <Square size={12} className="text-forge-text" />
         </button>
         <button
-          onClick={handleClose}
-          className="w-[46px] h-full flex items-center justify-center hover:bg-[#e81123] hover:text-white transition-colors"
+          onClick={handleClose} aria-label="Cerrar ventana"
+          className="w-[38px] h-full flex items-center justify-center hover:bg-[#e81123] hover:text-white transition-colors"
         >
           <X size={16} className="text-forge-text" />
         </button>
       </div>
     </div>
+    {helpMode && <WorkbenchHelp mode={helpMode} onClose={() => { setHelpMode(null); document.querySelector<HTMLButtonElement>('[data-help-menu]')?.focus(); }} />}
+    </>
   );
 }

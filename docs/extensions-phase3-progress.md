@@ -94,7 +94,8 @@ Pruebas añadidas (43 casos nuevos; la suite pasa de 98 a 141 tests):
   transporte falso y un launcher falso cuyos «procesos» ejecutan el
   responder **real** del bootstrap.
 
-Pendiente en este incremento: **la prueba de integración con un
+Estado histórico del incremento (resuelto para el flujo normal en Linux el
+2026-10-31; ver [evidencia](./verification-2026-10-31.md)): **la prueba de integración con un
 `utilityProcess` real**. Requiere `app.whenReady()` y en este entorno
 Electron aborta sin display (`--ozone-platform=headless` vuelca core y no hay
 `Xvfb`), así que ejecutarla obligaría a abrir una ventana. Queda anotada para
@@ -577,7 +578,8 @@ aislamiento descrito arriba).
   Node completo; lo que sí se sostiene es que no se lleva por delante ni a
   Forge ni a sus compañeras.
 
-Sigue pendiente la **prueba de integración con un `utilityProcess` real**,
+Pendiente histórico, verificado para el flujo normal en Linux el 2026-10-31
+([alcance](./verification-2026-10-31.md)): **la prueba de integración con un `utilityProcess` real**,
 anotada desde el 3.1: requiere `app.whenReady()` y en este entorno Electron
 aborta sin display (`--ozone-platform=headless` vuelca core y no hay `Xvfb`),
 así que ejecutarla obligaría a abrir una ventana. El sustituto sigue siendo
@@ -639,8 +641,10 @@ traducción de los activation events.
 
 Los siete incrementos (3.0–3.6) están cerrados. El gate de seguridad de
 [extensions-security-and-testing.md](./extensions-security-and-testing.md) §9
-queda cubierto salvo la prueba de integración con un `utilityProcess` real,
-que este entorno no puede ejecutar sin display y sigue anotada.
+se complementó el 2026-10-31 con integración real en Linux: arranque,
+comandos, búsqueda, watchers y edición/guardado de un buffer. Los escenarios
+hostiles de timeout/crash siguen verificados con transporte simulado.
+Ver [evidencia y límites](./verification-2026-10-31.md).
 
 El siguiente milestone es el 4 (workspace, documentos y edición), según
 [extensions-roadmap.md](./extensions-roadmap.md).

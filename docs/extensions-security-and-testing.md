@@ -84,6 +84,20 @@ que no son segmentos de ruta seguros.
 - Logs con redacción de secretos y paths cuando se exportan.
 - Safe Mode y deshabilitación desde fuera del host.
 
+Desde 4.4, watchers y búsquedas tienen ownership en host y main. Se comprueba
+que deactivate (incluso si lanza), activación fallida, stop, restart y crash
+liberan timers y cancelan recorridos pendientes. Cada recorrido autoriza la
+raíz y las entradas canónicas, omite symlinks y rechaza nombres de proveedor
+que intenten traversal; escribir mediante enlaces colgantes o padres symlink
+también se rechaza. Fallar la canonicalización no habilita un fallback a la
+ruta textual. El matcher de globs usa cómputo dinámico, sin backtracking
+exponencial por patrones de extensión. Los comandos de observación SSH usan
+quoting y delimitación NUL, con pruebas sobre nombres adversariales.
+
+Límites y evidencia local/SSH del incremento:
+[extensions-phase4-progress.md](./extensions-phase4-progress.md). Sigue sin ser
+un sandbox de Node ni una garantía frente a carreras de cambios en disco.
+
 ## 6. Webviews
 
 - `contextIsolation`, sandbox y sin Node integration.
@@ -160,3 +174,10 @@ No se ejecuta código de terceros hasta pasar:
 | Crash isolation demostrado | Cubierto | Milestone 3.5 (timeout de la colgada, crash con backoff, request en vuelo rechazado) |
 | Logs y reporte de activation failure | Cubierto | Milestone 3.4 (`ext:host:activation`, métricas y fallos por generación) |
 | Safe Mode | Cubierto | Milestone 3.5 (`--disable-extensions` y decisión persistida, comprobado en el origen) |
+
+### Integración real en Linux — 2026-10-31
+
+El host real fue verificado con una fixture VSIX local: arranque, reinicio,
+comandos, búsquedas, eventos de archivos y edición/guardado de un buffer.
+Los escenarios hostiles de crash/timeout siguen usando transporte
+simulado. Ver [la evidencia y sus límites](./verification-2026-10-31.md).

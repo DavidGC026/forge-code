@@ -13,8 +13,8 @@ body {
   -moz-osx-font-smoothing: grayscale;
   user-select: none;
   overflow: hidden;
-  background-color: #302F36;
-  color: #D0D3DA;
+  background-color: #202228;
+  color: #D9DCE3;
 }
 
 button:disabled {
@@ -44,8 +44,8 @@ button:disabled {
 
 /* ── Context Menu ───────────────────────────────────────────────────── */
 .context-menu {
-  background-color: #24282E;
-  border: 1px solid #3A3F4B;
+  background-color: #22252C;
+  border: 1px solid #343740;
   border-radius: 6px;
   padding: 4px 0;
   min-width: 170px;
@@ -63,13 +63,13 @@ button:disabled {
 
 .context-menu-item:hover {
   background-color: rgba(229, 46, 61, 0.15);
-  color: #E52E3D;
+  color: #E05A68;
 }
 
 .context-menu-divider {
   height: 1px;
   margin: 4px 0;
-  background-color: #3A3F4B;
+  background-color: #343740;
 }
 
 /* ── Monaco Editor Container ────────────────────────────────────────── */
@@ -139,7 +139,7 @@ button:disabled {
 
 /* ── Terminal styling overrides ─────────────────────────────────────── */
 .xterm-viewport {
-  background-color: #1F2025 !important;
+  background-color: #191B20 !important;
 }
 .xterm .xterm-viewport::-webkit-scrollbar {
   width: 10px;
@@ -151,210 +151,81 @@ button:disabled {
 
 /* ── Dropdown ───────────────────────────────────────────────────────── */
 .dropdown-menu {
-  background-color: #24282E;
-  border: 1px solid #3A3F4B;
+  background-color: #22252C;
+  border: 1px solid #343740;
   border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 
 /* ── Generic input ──────────────────────────────────────────────────── */
 .forge-input {
-  background-color: #1F2025;
-  border: 1px solid #E52E3D;
-  color: #D0D3DA;
+  background-color: #191B20;
+  border: 1px solid #E05A68;
+  color: #D9DCE3;
   outline: none;
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 13px;
 }
 
-/* ── Professional workbench surfaces ────────────────────────────────── */
-.forge-home {
-  background:
-    radial-gradient(circle at 18% 0%, rgba(229, 46, 61, 0.13), transparent 34%),
-    radial-gradient(circle at 88% 12%, rgba(157, 181, 255, 0.075), transparent 30%),
-    linear-gradient(180deg, #303039 0%, #282B33 44%, #24262D 100%);
-}
-
-.forge-home-hero {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.075);
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025)),
-    rgba(31, 34, 42, 0.72);
-  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.22);
-}
-
-.forge-panel,
-.forge-metric-tile {
-  border: 1px solid rgba(255, 255, 255, 0.075);
-  border-radius: 8px;
-  background: rgba(31, 34, 42, 0.76);
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.18);
-  overflow: hidden;
-}
-
-.forge-panel-header {
-  min-height: 58px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
-  background: rgba(255, 255, 255, 0.026);
-}
-
-.forge-panel-header h2 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 650;
-  color: #F2F4F8;
-}
-
-.forge-panel-header p {
-  margin: 2px 0 0;
-  font-size: 11px;
-  color: rgba(208, 211, 218, 0.52);
-}
-
-.forge-metric-tile {
-  min-height: 78px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px;
-}
-
-.forge-metric-tile p {
-  margin: 0 0 3px;
-  color: rgba(208, 211, 218, 0.54);
-  font-size: 11px;
-}
-
-.forge-metric-tile strong {
-  display: block;
-  color: #F2F4F8;
-  font-size: 15px;
-  font-weight: 650;
-}
-
-.forge-primary-button,
-.forge-secondary-button,
-.forge-icon-text-button,
-.forge-wide-action,
-.forge-command-tile,
-.forge-toolbar-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: 6px;
-  transition:
-    background-color 0.12s ease,
-    border-color 0.12s ease,
-    color 0.12s ease,
-    transform 0.12s ease;
-}
-
-.forge-primary-button {
-  height: 34px;
-  padding: 0 13px;
-  border: 1px solid rgba(229, 46, 61, 0.55);
-  background: rgba(229, 46, 61, 0.16);
-  color: #FFF2ED;
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.forge-primary-button:hover {
-  background: rgba(229, 46, 61, 0.23);
-}
-
-.forge-secondary-button {
-  height: 34px;
-  padding: 0 12px;
-  border: 1px solid rgba(157, 181, 255, 0.35);
-  background: rgba(157, 181, 255, 0.10);
-  color: #DCE5FF;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.forge-secondary-button:hover {
-  background: rgba(157, 181, 255, 0.16);
-}
-
-.forge-icon-text-button {
-  height: 28px;
-  padding: 0 9px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(208, 211, 218, 0.78);
-  font-size: 12px;
-}
-
-.forge-icon-text-button:hover:not(:disabled) {
-  color: #F2F4F8;
-  background: rgba(255, 255, 255, 0.075);
-}
-
-.forge-wide-action {
-  width: 100%;
-  height: 38px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  color: #D0D3DA;
-  font-size: 13px;
-}
-
-.forge-wide-action:hover {
-  border-color: rgba(229, 46, 61, 0.38);
-  color: #F2F4F8;
-  background: rgba(229, 46, 61, 0.085);
-}
-
-.forge-command-tile {
-  min-height: 74px;
-  flex-direction: column;
-  border: 1px solid rgba(255, 255, 255, 0.075);
-  background: rgba(255, 255, 255, 0.035);
-  color: rgba(208, 211, 218, 0.82);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.forge-command-tile:hover:not(:disabled) {
-  border-color: rgba(229, 46, 61, 0.34);
-  background: rgba(229, 46, 61, 0.082);
-  color: #F2F4F8;
-  transform: translateY(-1px);
-}
-
-.forge-command-tile:disabled {
-  opacity: 0.42;
-}
-
-.forge-toolbar-button {
-  width: 26px;
-  height: 24px;
-  border: 1px solid transparent;
-  color: rgba(208, 211, 218, 0.62);
-}
-
-.forge-toolbar-button:hover {
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.055);
-  color: #F2F4F8;
-}
-
-@media (max-width: 900px) {
-  .forge-home-hero {
-    flex-direction: column;
+/* Workbench controls use the same focus treatment across panels and menus. */
+@layer base {
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  [role="tab"]:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 2px solid theme('colors.forge-gold');
+    outline-offset: -2px;
   }
+  button:disabled { @apply opacity-40; }
+}
+
+@layer components {
+  .forge-section-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.13em] text-forge-text-dim;
+  }
+  .forge-primary-button, .forge-secondary-button {
+    @apply inline-flex min-h-[35px] items-center justify-center gap-2 rounded-md border px-3 text-[12px] font-medium transition-colors;
+  }
+  .forge-primary-button {
+    @apply border-forge-accent/40 bg-forge-accent/15 text-forge-text-strong hover:bg-forge-accent/25 hover:border-forge-accent/70;
+  }
+  .forge-secondary-button {
+    @apply border-forge-border bg-white/[0.025] text-forge-text hover:bg-white/[0.06] hover:border-forge-text-dim/40;
+  }
+  .forge-toolbar-button {
+    @apply inline-flex h-6 w-7 items-center justify-center rounded text-forge-text-dim transition-colors hover:bg-white/[0.06] hover:text-forge-text-strong;
+  }
+  .forge-home-action {
+    @apply flex min-h-[39px] w-full items-center gap-3 rounded-md px-2 text-[12px] text-forge-text transition-colors enabled:hover:bg-white/[0.045] enabled:hover:text-forge-text-strong;
+  }
+  .forge-project-file {
+    @apply flex min-h-[37px] w-full items-center gap-3 px-4 text-left text-[12px] text-forge-text transition-colors hover:bg-white/[0.045];
+  }
+  .forge-kbd {
+    @apply rounded border border-forge-border bg-white/[0.025] px-1.5 py-0.5 font-sans text-[10px] text-forge-text-dim whitespace-nowrap;
+  }
+}
+
+.forge-home { container-type: inline-size; background: theme('colors.forge-editor'); }
+.forge-welcome-columns { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); }
+.forge-brand-mark { display: inline-flex; width: 23px; height: 22px; align-items: center; gap: 3px; }
+.forge-brand-mark span { width: 4px; background: currentColor; transform: skew(-15deg); border-radius: 1px; }
+.forge-brand-mark span:nth-child(1) { height: 12px; }
+.forge-brand-mark span:nth-child(2) { height: 22px; }
+.forge-brand-mark span:nth-child(3) { height: 16px; }
+
+/* Container queries also work when the sidebars leave a narrow editor. */
+@container (max-width: 590px) {
+  .forge-welcome { padding: 28px 24px; }
+  .forge-welcome-columns { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+}
+@container (max-width: 320px) {
+  .forge-welcome { padding: 24px 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0s !important; animation-duration: 0s !important; }
 }

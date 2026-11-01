@@ -96,13 +96,13 @@ function makeTool(
 }
 
 const TOOLS = [
-  makeTool('getCurrentSelection', 'Get the current text selection in the active Forge editor.'),
-  makeTool('getLatestSelection', 'Get the most recent text selection in Forge.'),
-  makeTool('getOpenEditors', 'Get information about currently open Forge editor tabs.'),
-  makeTool('getWorkspaceFolders', 'Get the currently opened Forge workspace folder.'),
+  makeTool('getCurrentSelection', 'Get the current text selection in the active Forge Code editor.'),
+  makeTool('getLatestSelection', 'Get the most recent text selection in Forge Code.'),
+  makeTool('getOpenEditors', 'Get information about currently open Forge Code editor tabs.'),
+  makeTool('getWorkspaceFolders', 'Get the currently opened Forge Code workspace folder.'),
   makeTool(
     'openFile',
-    'Open a file in Forge and optionally select a text range.',
+    'Open a file in Forge Code and optionally select a text range.',
     {
       filePath: { type: 'string' },
       preview: { type: 'boolean' },
@@ -115,25 +115,25 @@ const TOOLS = [
   ),
   makeTool(
     'checkDocumentDirty',
-    'Check whether an open Forge document has unsaved changes.',
+    'Check whether an open Forge Code document has unsaved changes.',
     { filePath: { type: 'string' } },
     ['filePath'],
   ),
   makeTool(
     'saveDocument',
-    'Save an open Forge document.',
+    'Save an open Forge Code document.',
     { filePath: { type: 'string' } },
     ['filePath'],
   ),
   makeTool(
     'close_tab',
-    'Close a Forge tab by label or file name.',
+    'Close a Forge Code tab by label or file name.',
     { tab_name: { type: 'string' } },
     ['tab_name'],
   ),
-  makeTool('getDiagnostics', 'Get diagnostics known to Forge. Currently returns an empty list.'),
-  makeTool('closeAllDiffTabs', 'Close all diff tabs. Forge does not create Claude diff tabs yet.'),
-  makeTool('openDiff', 'Open a blocking diff view. Not implemented in Forge yet.'),
+  makeTool('getDiagnostics', 'Get diagnostics known to Forge Code. Currently returns an empty list.'),
+  makeTool('closeAllDiffTabs', 'Close all diff tabs. Forge Code does not create Claude diff tabs yet.'),
+  makeTool('openDiff', 'Open a blocking diff view. Not implemented in Forge Code yet.'),
 ];
 
 class MiniWebSocketConnection {
@@ -441,7 +441,7 @@ export class ClaudeIdeServer {
       return {
         protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: { tools: {} },
-        serverInfo: { name: 'Forge', version: '1.0.0' },
+        serverInfo: { name: 'Forge Code', version: '1.0.0' },
       };
     }
     if (method === 'ping') return {};
@@ -582,7 +582,7 @@ export class ClaudeIdeServer {
         JSON.stringify({
           pid: process.pid,
           workspaceFolders,
-          ideName: 'Forge',
+          ideName: 'Forge Code',
           transport: 'ws',
           authToken: this.authToken,
         }, null, 2),

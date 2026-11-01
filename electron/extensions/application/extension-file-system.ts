@@ -138,7 +138,7 @@ export class ExtensionFileSystem {
   }
 
   /** Resolves symlinks, applies the policy and returns the real path. */
-  private async authorise(
+  async authorise(
     extensionId: string,
     target: string,
     mode: 'read' | 'write',
@@ -148,8 +148,15 @@ export class ExtensionFileSystem {
     }
     // Resolving first is what makes a symlink out of the workspace fail:
     // the string looks contained, the real path does not.
-    const real = await this.options.fs.realpath(target).catch(() => target);
-    const scopes = this.options.scopesFor(extensionId);
+    const real = await this.options.fs.realpath(target);
+    const rawScopes = this.options.scopesFor(extensionId);
+    // An opened folder can itself be a symlink. Compare canonical scopes
+    // against canonical targets, including when a scope changes on disk.
+    const [workspace, extensionDir, ...storagePaths] = await Promise.all([
+      rawScopes.workspace, rawScopes.extensionDir, ...rawScopes.storagePaths,
+    ].map((scope) => scope && namespaceOf(scope) === namespaceOf(real)
+      ? this.options.fs.realpath(scope) : Promise.resolve(scope)));
+    const scopes: FileAccessScopes = { workspace, extensionDir: extensionDir ?? '', storagePaths };
     const verdict = checkFileAccess(real, mode, scopes);
 
     if (!verdict.allowed) {
@@ -183,4 +190,8 @@ function toBytes(value: unknown): Uint8Array {
   }
   if (typeof value === 'string') return Uint8Array.from(Buffer.from(value, 'base64'));
   return new Uint8Array(0);
+}
+
+function namespaceOf(target: string): string {
+  return /^[a-zA-Z][\w+.-]*:\/\/[^/]+/.exec(target)?.[0] ?? 'local';
 }

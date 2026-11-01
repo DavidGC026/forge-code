@@ -1,6 +1,6 @@
 # Git y Source Control
 
-Forge habla con el `git` del PATH. No hay libgit2. El backend es
+Forge Code habla con el `git` del PATH. No hay libgit2. El backend es
 `electron/git.ts`; la UI es `SourceControlPanel` + `gitSlice`.
 
 ## Operaciones
@@ -31,7 +31,7 @@ panel de Source Control.
 El token **no** viaja en la línea de comandos. `git.ts` lo inyecta con
 un credential helper en memoria para `git push` / `git pull`.
 
-Forge no trae un client id de producto. Sin App configurada, push/pull
+Forge Code no trae un client id de producto. Sin App configurada, push/pull
 HTTPS depende de la config de git del usuario.
 
 ## Dónde no corre

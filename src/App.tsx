@@ -10,6 +10,7 @@ import CommandPalette from './components/CommandPalette';
 import RemoteSSHModal from './components/RemoteSSHModal';
 import ExtensionNotifications from './components/ExtensionNotifications';
 import QuickOpen from './components/QuickOpen';
+import ResizeDivider from './components/ResizeDivider';
 import AIPanel from './components/AIPanel/AIPanel';
 import { Bot, Eraser, Maximize2, MessageSquare, Minimize2, RotateCcw, Terminal as TerminalIcon, X } from 'lucide-react';
 import type { ClaudeIdeEditorState } from './types';
@@ -44,7 +45,7 @@ const DIVIDER_HIT = 6;
 /** AI sidebar (right) bounds. Larger than the left sidebar by design. */
 const AI_PANEL_MIN = 280;
 const AI_PANEL_MAX = 720;
-const RIGHT_PANEL_MAXIMIZED_WIDTH = 'minmax(520px, 58vw)';
+const EDITOR_MIN_WIDTH = 360;
 
 function toFileUri(filePath: string): string {
   const normalized = filePath.replace(/\\/g, '/');
@@ -86,168 +87,6 @@ function publishClaudeEditorState(): void {
   } catch {
     /* noop outside Electron */
   }
-}
-
-function VerticalDivider({
-  onDrag,
-}: {
-  onDrag: (clientX: number) => void;
-}) {
-  const [hovering, setHovering] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  // Ref mirror of `dragging` so pointermove handlers don't see stale state.
-  const draggingRef = useRef(false);
-
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    draggingRef.current = true;
-    setDragging(true);
-    try {
-      (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-    } catch {
-      /* some browsers throw if the pointer is already captured */
-    }
-    // Apply immediately so a click without movement still snaps the sidebar
-    // to the cursor column.
-    onDrag(e.clientX);
-  };
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!draggingRef.current) return;
-    e.preventDefault();
-    onDrag(e.clientX);
-  };
-  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!draggingRef.current) return;
-    draggingRef.current = false;
-    setDragging(false);
-    try {
-      (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
-    } catch {
-      /* noop */
-    }
-  };
-
-  const active = hovering || dragging;
-
-  return (
-    <div
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-      style={{
-        width: '100%',
-        height: '100%',
-        cursor: 'col-resize',
-        background: 'transparent',
-        position: 'relative',
-        flexShrink: 0,
-        zIndex: 10,
-        // Disable browser touch/scroll behaviors so a drag stays a drag.
-        touchAction: 'none',
-        userSelect: 'none',
-      }}
-      title="Drag to resize sidebar"
-      role="separator"
-      aria-orientation="vertical"
-    >
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          bottom: 0,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: 2,
-          background: active ? '#E52E3D' : 'transparent',
-          transition: 'background 0.12s ease',
-          pointerEvents: 'none',
-        }}
-      />
-    </div>
-  );
-}
-
-function HorizontalDivider({
-  onDrag,
-}: {
-  onDrag: (clientY: number) => void;
-}) {
-  const [hovering, setHovering] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const draggingRef = useRef(false);
-
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    draggingRef.current = true;
-    setDragging(true);
-    try {
-      (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-    } catch {
-      /* noop */
-    }
-    onDrag(e.clientY);
-  };
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!draggingRef.current) return;
-    e.preventDefault();
-    onDrag(e.clientY);
-  };
-  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!draggingRef.current) return;
-    draggingRef.current = false;
-    setDragging(false);
-    try {
-      (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
-    } catch {
-      /* noop */
-    }
-  };
-
-  const active = hovering || dragging;
-
-  return (
-    <div
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-      style={{
-        width: '100%',
-        height: DIVIDER_HIT,
-        cursor: 'row-resize',
-        background: 'transparent',
-        position: 'relative',
-        flexShrink: 0,
-        zIndex: 10,
-        touchAction: 'none',
-        userSelect: 'none',
-      }}
-      title="Drag to resize terminal"
-      role="separator"
-      aria-orientation="horizontal"
-    >
-      <div
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          height: 2,
-          background: active ? '#E52E3D' : 'transparent',
-          transition: 'background 0.12s ease',
-          pointerEvents: 'none',
-        }}
-      />
-    </div>
-  );
 }
 
 function RightWorkspace() {
@@ -416,6 +255,7 @@ function RightWorkspace() {
 export default function App() {
   const sidebarVisible = useStore((s) => s.sidebarVisible);
   const bottomPanelVisible = useStore((s) => s.bottomPanelVisible);
+  const bottomPanelHeight = useStore((s) => s.bottomPanelHeight);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   const togglePanel = useStore((s) => s.togglePanel);
   const saveFile = useStore((s) => s.saveFile);
@@ -428,6 +268,12 @@ export default function App() {
   const resetZoom = useStore((s) => s.resetZoom);
   const subscribeToFsChanges = useStore((s) => s.subscribeToFsChanges);
   const openFolder = useStore((s) => s.openFolder);
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   const sidebarWidth = useStore((s) => s.sidebarWidth);
   const setSidebarWidth = useStore((s) => s.setSidebarWidth);
   const setBottomPanelHeight = useStore((s) => s.setBottomPanelHeight);
@@ -794,21 +640,28 @@ export default function App() {
   //   Row 2: ActivityBar 40px
   //   Row 3: Sidebar | leftDivider | Editor (1fr) | rightDivider | AIPanel
   //   Row 4: StatusBar 22px
-  const sidebarPart = sidebarVisible
-    ? `${sidebarWidth}px ${DIVIDER_HIT}px`
-    : '0px 0px';
+  const sidebarOverlay = sidebarVisible && viewportWidth < 720;
+  const effectiveSidebarWidth = Math.min(sidebarWidth, Math.max(SIDEBAR_MIN, viewportWidth - EDITOR_MIN_WIDTH));
   const rightAgentPanelVisible = agentTerminalDock === 'right' && hasAgentTerminal;
   const rightPanelVisible = aiPanelVisible || rightAgentPanelVisible;
-  const aiPart = rightPanelVisible
-    ? `${DIVIDER_HIT}px ${rightPanelMaximized ? RIGHT_PANEL_MAXIMIZED_WIDTH : `${aiPanelWidth}px`}`
+  const requestedRightWidth = rightPanelMaximized ? Math.max(520, viewportWidth * 0.58) : aiPanelWidth;
+  const availableWidth = viewportWidth - (sidebarVisible && !sidebarOverlay ? effectiveSidebarWidth + DIVIDER_HIT : 0);
+  // An overlay preserves the editor width without overwriting saved panel sizes.
+  const rightPanelOverlay = rightPanelVisible && availableWidth - requestedRightWidth < EDITOR_MIN_WIDTH;
+  const effectiveRightWidth = Math.min(requestedRightWidth, viewportWidth - 24);
+  const sidebarPart = sidebarVisible && !sidebarOverlay
+    ? `${effectiveSidebarWidth}px ${DIVIDER_HIT}px`
     : '0px 0px';
-  const gridTemplateColumns = `${sidebarPart} 1fr ${aiPart}`;
+  const aiPart = rightPanelVisible && !rightPanelOverlay
+    ? `${DIVIDER_HIT}px ${effectiveRightWidth}px`
+    : '0px 0px';
+  const gridTemplateColumns = `${sidebarPart} minmax(0, 1fr) ${aiPart}`;
 
   return (
     <div
-      className="w-screen h-screen grid bg-forge-bg text-forge-text text-[13px]"
+      className="relative w-screen h-screen grid overflow-hidden bg-forge-bg text-forge-text text-[13px]"
       style={{
-        gridTemplateRows: '32px 40px 1fr 22px',
+        gridTemplateRows: '32px 40px minmax(0, 1fr) 22px',
         gridTemplateColumns,
       }}
     >
@@ -823,14 +676,17 @@ export default function App() {
       </div>
 
       {/* Row 3 - Col 1: SideBar */}
-      <div style={{ gridColumn: '1', gridRow: '3', overflow: 'hidden' }}>
+      <div
+        className={sidebarOverlay ? 'absolute left-0 top-[72px] bottom-[22px] z-20 overflow-hidden border-r border-forge-border shadow-2xl' : 'min-h-0 overflow-hidden'}
+        style={sidebarOverlay ? { width: Math.min(sidebarWidth, viewportWidth - 48) } : { gridColumn: '1', gridRow: '3' }}
+      >
         {sidebarVisible && <SideBar />}
       </div>
 
       {/* Row 3 - Col 2: vertical drag divider.
           The wrapper is explicitly sized so the divider's `height: 100%`
           resolves against a known box. */}
-      {sidebarVisible && (
+      {sidebarVisible && !sidebarOverlay && (
         <div
           style={{
             gridColumn: '2',
@@ -841,14 +697,14 @@ export default function App() {
             overflow: 'visible',
           }}
         >
-          <VerticalDivider onDrag={handleSidebarDrag} />
+          <ResizeDivider orientation="vertical" label="Ancho del explorador" value={effectiveSidebarWidth} onDrag={handleSidebarDrag} />
         </div>
       )}
 
       {/* Row 3 - Col 3: Editor + Bottom panel */}
       <div
         ref={editorColumnRef}
-        className="flex flex-col overflow-hidden"
+        className="min-w-0 min-h-0 flex flex-col overflow-hidden"
         style={{ gridColumn: '3', gridRow: '3' }}
       >
         <div className="flex-1 overflow-hidden min-h-0">
@@ -856,14 +712,14 @@ export default function App() {
         </div>
         {bottomPanelVisible && (
           <>
-            <HorizontalDivider onDrag={handleBottomDrag} />
+            <ResizeDivider orientation="horizontal" label="Altura de la terminal" value={bottomPanelHeight} onDrag={handleBottomDrag} />
             <BottomPanel />
           </>
         )}
       </div>
 
       {/* Row 3 - Col 4: right vertical drag divider */}
-      {rightPanelVisible && (
+      {rightPanelVisible && !rightPanelOverlay && (
         <div
           style={{
             gridColumn: '4',
@@ -874,17 +730,14 @@ export default function App() {
             overflow: 'visible',
           }}
         >
-          <VerticalDivider onDrag={handleAIPanelDrag} />
+          <ResizeDivider orientation="vertical" label="Ancho del asistente" value={effectiveRightWidth} onDrag={handleAIPanelDrag} />
         </div>
       )}
 
       {/* Row 3 - Col 5: AI workspace */}
       <div
-        style={{
-          gridColumn: '5',
-          gridRow: '3',
-          overflow: 'hidden',
-        }}
+        className={rightPanelOverlay ? 'absolute right-0 top-[72px] bottom-[22px] z-30 overflow-hidden border-l border-forge-border shadow-2xl' : 'min-h-0 overflow-hidden'}
+        style={rightPanelOverlay ? { width: effectiveRightWidth } : { gridColumn: '5', gridRow: '3' }}
       >
         {rightPanelVisible && <RightWorkspace />}
       </div>

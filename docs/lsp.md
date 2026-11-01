@@ -1,6 +1,6 @@
 # LSP nativo (TypeScript / JavaScript)
 
-Forge trae un language server **propio** para TS/JS. No es el bridge
+Forge Code trae un language server **propio** para TS/JS. No es el bridge
 de extensiones del Milestone 5: una extensión que lance un server no
 se engancha aquí.
 

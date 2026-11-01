@@ -1,6 +1,6 @@
 # IA nativa y agentes
 
-Forge tiene **tres** integraciones de IA distintas. No son la misma
+Forge Code tiene **tres** integraciones de IA distintas. No son la misma
 cosa, y ninguna de ellas es una extensión VS Code (las de chat/LM van
 después del Milestone 8; ver
 [extensions-compatibility.md](./extensions-compatibility.md)).

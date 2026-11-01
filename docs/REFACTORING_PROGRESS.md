@@ -32,7 +32,7 @@ El archivo principal de estado global (`store.ts`) sigue en ~1 750 líneas
 - [ ] Construir un `store/index.ts` unificado con el combinador de slices.
 
 Monolitos fuera del store que siguen por encima de la guía (300–400
-líneas): `electron/main.ts`, `ExplorerPanel.tsx`, `EditorArea.tsx`,
+líneas): `electron/main.ts`, `ExplorerPanel.tsx`,
 `src/types.ts`, `App.tsx`. El mapa está en
 [app-architecture.md](./app-architecture.md).
 
@@ -238,3 +238,17 @@ Documentación de producto añadida en 2026-08-22: README de raíz,
 [lsp.md](./lsp.md) y [remote-workspaces.md](./remote-workspaces.md). La
 matriz, el “estado actual” de la arquitectura y el próximo incremento
 del roadmap se alinearon con el código (M0 cerrado, siguiente corte 3.2).
+
+## Forge Code y cierre del incremento 4.4 — 2026-10-31
+
+El editor se renombró a Forge Code conservando perfiles y contratos. Se
+rediseñaron inicio, barras, pestañas y estados; `EditorArea.tsx` quedó como
+composición de módulos menores de 400 líneas y los divisores salieron de
+`App.tsx`. Los paneles estrechos usan overlays sin sobrescribir tamaños.
+
+El 4.4 incorpora watchers/búsquedas cancelables y corrige autorización de
+symlinks y URIs SSH. La QA real encontró y corrigió el `env` opcional del
+launcher, la carrera de restauración y los getters congelados/orden de
+sincronización documental. Ver [diseño](./workbench-design.md),
+[progreso 4.4](./extensions-phase4-progress.md) y
+[verificación](./verification-2026-10-31.md).

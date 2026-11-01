@@ -30,6 +30,8 @@ const SYMLINK = 64;
  *  with the same SSH helpers the workbench already uses. */
 export interface RemoteFileSystemBridge {
   isRemote(target: string): boolean;
+  /** Canonical resource URI, resolved on the remote machine. */
+  realpath?(target: string): Promise<string>;
   stat(target: string): Promise<ExtensionFileStat>;
   readFile(target: string): Promise<Uint8Array>;
   writeFile(target: string, data: Uint8Array): Promise<void>;
@@ -52,7 +54,7 @@ export class NodeExtensionFileSystem implements ExtensionFileSystemPort {
     if (remote?.isRemote(target)) return remote;
     // A remote-looking URI with no bridge must not fall through to the
     // local filesystem.
-    if (!remote && looksRemote(target)) {
+    if (looksRemote(target)) {
       throw new ExtensionFileSystemError(
         'Unavailable',
         `El workspace remoto no está disponible para "${target}".`,
@@ -62,13 +64,37 @@ export class NodeExtensionFileSystem implements ExtensionFileSystemPort {
   }
 
   async realpath(target: string): Promise<string> {
-    if (this.remoteFor(target)) return target;
+    const remote = this.remoteFor(target);
+    if (remote) {
+      if (remote.realpath) return remote.realpath(target);
+      throw new ExtensionFileSystemError('Unavailable', 'El puente remoto no resuelve enlaces simbólicos.');
+    }
+    return this.resolveLocalPath(target, 0);
+  }
+
+  private async resolveLocalPath(target: string, depth: number): Promise<string> {
+    if (depth > 64) throw new ExtensionFileSystemError('Unavailable', 'Demasiados enlaces o niveles de ruta.');
     try {
       return await fs.promises.realpath(target);
-    } catch {
-      // Missing paths resolve to themselves so "outside" and "not found"
-      // stay distinguishable in the policy.
-      return path.resolve(target);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw translate(err, target);
+      // Resolve the closest existing ancestor too. Otherwise writing a new
+      // child through `workspace/link-out/new.txt` would bypass the policy.
+      const absolute = path.resolve(target);
+      let link;
+      try { link = await fs.promises.lstat(absolute); }
+      catch (missing) {
+        if ((missing as NodeJS.ErrnoException).code !== 'ENOENT') throw translate(missing, target);
+      }
+      // realpath reports ENOENT for a dangling symlink too. Resolving only
+      // its parent would authorise the link name and write to its target.
+      if (link?.isSymbolicLink()) {
+        const destination = await fs.promises.readlink(absolute);
+        return this.resolveLocalPath(path.resolve(path.dirname(absolute), destination), depth + 1);
+      }
+      const parent = path.dirname(absolute);
+      if (parent === absolute) return absolute;
+      return path.join(await this.resolveLocalPath(parent, depth + 1), path.basename(absolute));
     }
   }
 

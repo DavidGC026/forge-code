@@ -1,7 +1,7 @@
 {
-  "name": "forge",
+  "name": "forge-code",
   "version": "1.0.0",
-  "description": "Forge — modern code editor built with Electron + React + TypeScript",
+  "description": "Forge Code — modern code editor built with Electron + React + TypeScript",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
@@ -50,7 +50,7 @@
   },
   "build": {
     "appId": "com.forge.app",
-    "productName": "Forge",
+    "productName": "Forge Code",
     "files": [
       "dist/**/*",
       "dist-electron/**/*"
@@ -63,6 +63,7 @@
     ],
     "npmRebuild": false,
     "linux": {
+      "icon": "dist-electron/assets/forge-logo.png",
       "target": [
         "AppImage"
       ],

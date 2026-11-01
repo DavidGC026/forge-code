@@ -1,4 +1,4 @@
-# Documentación de Forge
+# Documentación de Forge Code
 
 Índice de `docs/`. Cada documento declara su alcance. **El roadmap y la
 matriz de compatibilidad mandan** sobre cualquier nota histórica de
@@ -11,6 +11,8 @@ extensiones. El mapa del editor (no el de extensiones) está en
 | Documento | Para qué sirve |
 | --- | --- |
 | [app-architecture.md](./app-architecture.md) | Procesos main/preload/renderer, store, IPC, workbench y `.forge/`. |
+| [brand-and-rename.md](./brand-and-rename.md) | Identidad Forge Code, carpeta local y conservación de perfiles y configuración. |
+| [workbench-design.md](./workbench-design.md) | Diseño del workbench, jerarquía visual y decisiones de interacción. |
 | [CODING_GUIDELINES.md](./CODING_GUIDELINES.md) | Reglas de arquitectura y estilo (límites de tamaño, slices, anti-monolitos). |
 | [REFACTORING_PROGRESS.md](./REFACTORING_PROGRESS.md) | Bitácora del refactor: slices extraídos y monolitos que quedan. |
 
@@ -24,6 +26,10 @@ extensiones. El mapa del editor (no el de extensiones) está en
 | [remote-workspaces.md](./remote-workspaces.md) | Motor `ssh://`: qué opera en remoto y qué no. |
 | [terminal-session-persistence.md](./terminal-session-persistence.md) | El PTY sobrevive a cambios de pestaña; React no es dueño del proceso. |
 | [remote-ssh-modal.md](./remote-ssh-modal.md) | Nota histórica del bug de `window.prompt()` en el modal SSH. |
+
+## Verificación de la entrega
+
+[QA de Forge Code y extensiones 4.4](./verification-2026-10-31.md): pruebas, flujos reales y límites.
 
 ## Sistema de extensiones
 

@@ -27,4 +27,14 @@ function activate(context) {
   };
 }
 
-module.exports = { activate, trace };
+function snapshot() {
+  return {
+    documents: vscode.workspace.textDocuments.map(doc => ({
+      fileName: doc.fileName, content: doc.getText(), version: doc.version,
+    })),
+    active: vscode.window.activeTextEditor?.document.fileName ?? null,
+    visible: vscode.window.visibleTextEditors.map(editor => editor.document.fileName),
+  };
+}
+
+module.exports = { activate, trace, snapshot };

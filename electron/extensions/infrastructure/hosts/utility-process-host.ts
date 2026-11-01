@@ -442,7 +442,9 @@ export function createUtilityProcessLauncher(
       const channel = new electron.MessageChannelMain();
       const child = electron.utilityProcess.fork(options.entryPoint, [], {
         serviceName: `forge-extension-host-${generation}`,
-        env: options.env,
+        // Electron 28 rejects an explicitly undefined env; omitting it is
+        // what preserves the parent's environment for the normal launcher.
+        ...(options.env ? { env: options.env } : {}),
         stdio: 'inherit',
       });
 

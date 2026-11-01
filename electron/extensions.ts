@@ -86,6 +86,7 @@ import {
   type DocumentSyncEvent,
 } from './extensions/application/document-mirror';
 import { WorkspaceEditService } from './extensions/application/workspace-edit-service';
+import { WorkspaceFilesService } from './extensions/application/workspace-files-service';
 import {
   WorkspaceTrustService,
   WorkspaceTrustError,
@@ -705,6 +706,17 @@ const extensionHost = new UtilityProcessExtensionHost({
   // falls through to the broker's `UNSUPPORTED_API`, which is what feeds the
   // compatibility report with real usage.
   onRequest: async (envelope) => {
+    if (envelope.method.startsWith('workspace.files.')) {
+      try {
+        return await workspaceFilesService.handle(envelope.extensionId ?? '',
+          envelope.method.slice('workspace.files.'.length), envelope.payload);
+      } catch (err) {
+        if (err instanceof ExtensionFileSystemError) {
+          throw new RpcError('INVALID_PAYLOAD', err.message, { code: err.code });
+        }
+        throw err;
+      }
+    }
     if (envelope.method === 'window.showMessage') {
       return showExtensionMessage(envelope.payload, envelope.extensionId ?? null);
     }
@@ -869,12 +881,13 @@ export function configureExtensionRemoteFileSystem(bridge: RemoteFileSystemBridg
   remoteFileSystemBridge = bridge;
 }
 
-const extensionFileSystem = new ExtensionFileSystem({
-  fs: new NodeExtensionFileSystem({
+const extensionFileSystemPort = new NodeExtensionFileSystem({
     get remote() {
       return remoteFileSystemBridge;
     },
-  }),
+});
+const extensionFileSystem = new ExtensionFileSystem({
+  fs: extensionFileSystemPort,
   scopesFor: (extensionId) => {
     const entry = extensionRegistry.get(extensionId);
     const descriptor = entry ? toHostDescriptor(entry) : null;
@@ -892,6 +905,19 @@ const extensionFileSystem = new ExtensionFileSystem({
     // extensions instead of guessing.
     console.warn(`[forge:ext-host] "${extensionId}" rechazada sobre "${target}": ${message}`);
   },
+});
+
+const workspaceFilesService = new WorkspaceFilesService({
+  fs: extensionFileSystemPort,
+  access: extensionFileSystem,
+  workspace: () => workspaceProvider(),
+  configuration: effectiveConfigurationSnapshot,
+  emit: (owner, event) => {
+    if (extensionHost.state.status !== 'running') return;
+    void extensionHost.request('workspace.files.changed', event, { extensionId: owner })
+      .catch((err) => console.warn('[forge:ext-host] watcher no propagado:', err.message));
+  },
+  warn: (message) => console.warn('[forge:ext-host]', message),
 });
 
 /**
@@ -1040,6 +1066,7 @@ const commandDispatcher = new ExtensionCommandDispatcher({
   log: (message) => console.warn('[forge:ext-host]', message),
 });
 extensionHost.onEvent((event) => {
+  if (event.type === 'state' && event.state.status !== 'running') workspaceFilesService.dispose();
   commandDispatcher.handleHostEvent(event);
   activationService.handleHostEvent(event);
 });

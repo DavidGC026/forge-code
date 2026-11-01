@@ -269,6 +269,7 @@ test('with a bridge, a remote uri goes through it and never through node fs', as
   const adapter = new NodeExtensionFileSystem({
     remote: {
       isRemote: (target) => target.startsWith('ssh://'),
+      realpath: async (target) => target,
       stat: async () => ({ type: 1, ctime: 0, mtime: 0, size: 2 }),
       readFile: async (target) => { seen.push(target); return new Uint8Array([104, 105]); },
       writeFile: async () => undefined,

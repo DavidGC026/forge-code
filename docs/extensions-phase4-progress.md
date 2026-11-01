@@ -1,6 +1,6 @@
 # Extensiones: progreso del Milestone 4 (workspace, documentos y edición)
 
-Última actualización: 2026-08-22
+Última actualización: 2026-10-31
 
 Diseño: [extensions-phase4-design.md](./extensions-phase4-design.md) · Milestone
 anterior: [extensions-phase3-progress.md](./extensions-phase3-progress.md)
@@ -257,9 +257,97 @@ el usuario).
 - **La falta de transacción se dice.** Entre disco y editor no la hay;
   reportar qué se aplicó es más útil que un `false` que oculta el estado.
 
+## Incremento 4.4 — watchers y búsquedas cancelables
+
+Completado (2026-10-31). `workspace.createFileSystemWatcher` observa creaciones,
+cambios y eliminaciones; `workspace.findFiles` devuelve `Uri[]` y acepta
+`CancellationToken`, glob de exclusión y `maxResults`. Se expone
+`RelativePattern` con base string, URI o workspace folder.
+
+- **IO en main, propiedad por extensión.** `WorkspaceFilesService` comparte
+  el puerto de `workspace.fs`, con el mismo adaptador local/SSH y la misma
+  autorización. El runtime libera recursos incluso cuando la extensión
+  olvida `context.subscriptions` o su `deactivate()` lanza una excepción.
+  Fallar al activar también limpia registros pendientes. Stop, restart y
+  crash invalidan todos los recursos de la generación desde main.
+- **Cancelación efectiva.** El host rechaza con `CancellationError` de
+  inmediato y envía el id de búsqueda a main; el recorrido comprueba la
+  cancelación después de cada IO y cede el event loop periódicamente.
+  Una operación de filesystem/SSH que ya empezó puede terminar, pero no
+  inicia otra después de reconocer la cancelación. Los ids de búsquedas
+  canceladas por cleanup quedan libres aunque ese IO siga pendiente.
+- **Polls serializados, cada segundo después del anterior.** Se crea una
+  instantánea inicial silenciosa y se comparan metadatos para publicar
+  eventos de archivos y carpetas. Un fallo de transporte conserva la última
+  instantánea completa: desconectarse no se presenta como borrar archivos.
+  Los flags `ignoreCreateEvents`, `ignoreChangeEvents`, `ignoreDeleteEvents`
+  se aplican en main y host; `dispose()` es idempotente y corta eventos tardíos.
+- **Política de rutas y enlaces.** Cada raíz y cada entrada se autorizan
+  sobre su ruta canónica. Los recorridos omiten symlinks y nombres de
+  proveedor que sean rutas o contengan NUL. `findFiles` se restringe al
+  workspace; un watcher con `RelativePattern` puede usar además el directorio
+  de instalación propio o su storage, bajo la política existente. También
+  se cerró la escritura de un archivo nuevo mediante un padre symlink o un
+  enlace colgante que apunta fuera del workspace. Los scopes se canonicalizan
+  para aceptar una carpeta de trabajo abierta mediante symlink, y un fallo
+  de resolución ya no cae a la ruta textual.
+- **Globs sin backtracking.** Matching dinámico, con trabajo proporcional a
+  tokens × longitud de ruta, para `*`, `**`, `?`, alternancias y clases ASCII.
+  Se rechazan patrones absolutos, traversal, llaves anidadas y más de 64
+  alternativas. Los nombres SSH se decodifican para comparar con el glob,
+  conservando scheme, authority y encoding al realizar IO.
+- **Exclusiones.** `undefined` usa entradas booleanas `true` de
+  `files.exclude`; `null` no aplica exclusiones; un glob explícito sustituye
+  las predeterminadas. Los objetos condicionales de `files.exclude` no se
+  implementan todavía. No se aplica `search.exclude`.
+- **Bridge SSH verificable.** `remote-file-system-observer` concentra los
+  comandos de observación con quoting de shell, `realpath`, `stat` con
+  precisión de milisegundos y `find -P` con nombres delimitados por NUL. No se
+  pierden comillas, saltos de línea, porcentajes ni espacios finales, y se
+  identifica el tipo symlink. Un puente sin canonicalización responde
+  `Unavailable`; ninguna URI remota cae al filesystem local.
+
+### Límites y verificación del incremento 4.4
+
+Polling puede perder cambios que ocurran y se deshagan entre instantáneas,
+incluyendo archivos de vida muy breve y escrituras que conserven todos los
+metadatos. No es un stream de eventos del kernel. Hay un máximo de 64 watchers
+por extensión, 20000 entradas y 64 niveles por recorrido; exceder el recorrido
+falla explícitamente, sin entregar una instantánea parcial. El glob admite
+hasta 1024 caracteres y 64 asteriscos. No se siguen enlaces dentro del árbol
+ni se promete un sandbox frente a Node completo o carreras de cambios en el
+filesystem. SSH requiere herramientas GNU (`realpath -m -z`, `find -printf`,
+`stat -c`); esta entrega no usó ninguna conexión SSH real.
+
+Pruebas nuevas: 27 casos en `workspace-files.test.cjs` (25) y
+`remote-file-system-observer.test.cjs` (2). Incluyen una fixture `watching`
+ejecutada por el protocolo completo, cleanup sin subscriptions, hook de
+desactivación que falla, activación fallida, restart/crash, cancelación con IO
+pendiente, aislamiento de owners e ids, snapshot incompleto, límites,
+symlinks reales —incluido enlace colgante—, workspace raíz mediante symlink,
+URI SSH con authority y nombres difíciles, glob adversarial y ejecución de los
+comandos SSH de producción contra un directorio temporal mediante un runner
+local inyectado. Build Electron y 118 casos focalizados pasaron.
+
+### Corrección de integración detectada en Electron real
+
+La facade copiaba namespaces mediante spread y evaluaba sus getters al
+activar la extensión. Si entonces no había pestañas, `workspace.textDocuments`
+permanecía vacío al abrirlas después; los getters de editor activo y editores
+visibles sufrían el mismo problema. Ahora conserva los descriptores de
+propiedades y consulta el estado vigente en cada acceso. Una regresión por
+el protocolo completo activa con documentos/editores vacíos, abre y modifica
+un buffer, cambia el foco y cierra todo, comprobando esos getters después de
+cada transición. La corrección conserva el protocolo de sincronización.
+Además, el hook del editor publica ahora los
+documentos antes de su layout: el host descarta vistas sin documento, y el
+orden anterior dejaba el editor activo vacío hasta otro movimiento de caret.
+Una prueba del hook real, con servicios y registries reales, verifica que
+un buffer recién abierto llega junto con su primer editor y conserva su texto
+sin guardar.
+
 ## Próximo incremento
 
-4.4 — file watchers y `findFiles` con cancelación. El criterio de salida es
-que un watcher se libere al desactivar la extensión, demostrado con una
-prueba: un watcher huérfano es un proceso leyendo disco por una extensión que
-ya no existe.
+4.5 — output channels, quick pick, input box, progress y clipboard. El
+criterio de salida es que una fixture publique salida y solicite datos sin
+bloquear el workbench.

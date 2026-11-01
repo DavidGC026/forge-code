@@ -12,9 +12,9 @@ interface PanelTab {
 
 const tabs: PanelTab[] = [
   { id: 'terminal', label: 'TERMINAL', icon: <TerminalIcon size={13} /> },
-  { id: 'problems', label: 'PROBLEMS', icon: <AlertTriangle size={13} /> },
-  { id: 'output', label: 'OUTPUT', icon: <FileOutput size={13} /> },
-  { id: 'debug', label: 'DEBUG CONSOLE', icon: <Bug size={13} /> },
+  { id: 'problems', label: 'PROBLEMAS', icon: <AlertTriangle size={13} /> },
+  { id: 'output', label: 'SALIDA', icon: <FileOutput size={13} /> },
+  { id: 'debug', label: 'CONSOLA DE DEPURACIÓN', icon: <Bug size={13} /> },
 ];
 
 function relativePath(workspacePath: string | null, filePath: string): string {
@@ -27,9 +27,9 @@ function relativePath(workspacePath: string | null, filePath: string): string {
 
 function severityLabel(problem: Problem): string {
   if (problem.severity === 1) return 'Error';
-  if (problem.severity === 2) return 'Warning';
-  if (problem.severity === 3) return 'Info';
-  return 'Hint';
+  if (problem.severity === 2) return 'Advertencia';
+  if (problem.severity === 3) return 'Información';
+  return 'Sugerencia';
 }
 
 function severityColor(problem: Problem): string {
@@ -47,7 +47,7 @@ function ProblemsView() {
   if (problems.length === 0) {
     return (
       <div className="h-full flex items-center px-3 font-mono text-[13px] text-forge-text/70">
-        No problems detected in workspace.
+        No se detectaron problemas en el proyecto.
       </div>
     );
   }
@@ -119,7 +119,7 @@ function TerminalSessionTabs({
                   onClose(session.id);
                 }}
                 className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-forge-text-strong"
-                title="Close terminal"
+                title="Cerrar terminal"
               >
                 <X size={11} />
               </button>
@@ -130,7 +130,7 @@ function TerminalSessionTabs({
       {showNew && (
         <button
           onClick={onNew}
-          title="New terminal"
+          title="Nueva terminal"
           className="h-[24px] w-[24px] flex items-center justify-center rounded text-forge-text/50 hover:text-forge-accent hover:bg-white/5 flex-shrink-0"
         >
           <Plus size={13} />
@@ -180,7 +180,7 @@ export function TerminalsPanel({
   if (sessions.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-forge-text/50 text-[12px]">
-        {empty ?? 'Starting terminal…'}
+        {empty ?? 'Iniciando terminal…'}
       </div>
     );
   }
@@ -227,7 +227,7 @@ export default function BottomPanel() {
 
   return (
     <div
-      className="flex-shrink-0 border-t border-forge-border/50 bg-forge-terminal flex flex-col"
+      className="min-h-[100px] max-h-[calc(100%_-_126px)] flex-shrink-0 border-t border-forge-border/50 bg-forge-terminal flex flex-col"
       style={{ height: `${bottomPanelHeight}px` }}
     >
       <div className="h-[32px] flex items-center justify-between px-2 bg-forge-titlebar border-b border-forge-border/40 select-none">
@@ -253,7 +253,7 @@ export default function BottomPanel() {
         <button
           onClick={togglePanel}
           className="p-1 hover:bg-white/10 rounded transition-colors"
-          title="Close panel"
+          title="Cerrar panel"
         >
           <X size={15} className="text-forge-text" />
         </button>
@@ -277,12 +277,12 @@ export default function BottomPanel() {
         )}
         {activeBottomTab === 'output' && (
           <div className="absolute inset-0 p-3 font-mono text-[13px] text-forge-text">
-            Output channel is empty.
+            El canal de salida está vacío.
           </div>
         )}
         {activeBottomTab === 'debug' && (
           <div className="absolute inset-0 p-3 font-mono text-[13px] text-forge-text">
-            Debug console is ready.
+            La consola de depuración está lista.
           </div>
         )}
       </div>

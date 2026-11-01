@@ -368,6 +368,17 @@ export function createBootstrapResponder(options: BootstrapResponderOptions): Re
           }
           return reply(message, 'response', { ok: true });
         }
+        case 'workspace.files.changed': {
+          const body = message.payload as { id?: unknown; kind?: unknown; uri?: unknown } | null;
+          if (!message.extensionId || typeof body?.id !== 'string' || typeof body.uri !== 'string'
+            || (body.kind !== 'create' && body.kind !== 'change' && body.kind !== 'delete')) {
+            throw new RpcError('INVALID_PAYLOAD', 'Evento de watcher inválido.');
+          }
+          requireRuntime().acceptWorkspaceFileEvent(message.extensionId, {
+            id: body.id, kind: body.kind, uri: body.uri,
+          });
+          return reply(message, 'response', { ok: true });
+        }
         case 'editors.sync': {
           // The renderer sends the whole layout: there are a handful of
           // editors, and reconciling a list is easier to get right than a

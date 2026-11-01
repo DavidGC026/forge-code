@@ -1,4 +1,4 @@
-# Arquitectura del editor Forge
+# Arquitectura del editor Forge Code
 
 Estado: **mapa del producto**, no de la plataforma de extensiones.
 Extensiones: [extensions-architecture.md](./extensions-architecture.md).
@@ -45,7 +45,7 @@ Reglas que ya se cumplen y no hay que romper:
 | Extensiones | `electron/extensions/` | `src/extensions/`, `extensionSlice.ts` | [extensions-architecture.md](./extensions-architecture.md) |
 
 `electron/extensions.ts` es facade temporal del subsistema de
-extensiones, no el composition root de Forge.
+extensiones, no el composition root de Forge Code.
 
 ## Estado global
 
@@ -111,6 +111,15 @@ cargan `any` en varios payloads.
 Persistencia de layout: `localStorage`. Persistencia de producto:
 `forge-config.json` en `userData` (reemplazó a `electron-store`; la
 dependencia en `package.json` ya no se usa).
+
+`electron/app-identity.ts` se carga primero en main y conserva los perfiles
+históricos `forge` / `Forge`, incluido el almacenamiento de Chromium.
+Ver [brand-and-rename.md](./brand-and-rename.md).
+
+El último workspace se restaura con `workspace:restore`. Preload escucha
+desde su inicio y conserva el evento hasta que React se suscribe; la entrega
+se difiere a una microtarea para que el montaje de StrictMode no duplique la
+apertura ni consuma el evento con una suscripción que ya se desmontó.
 
 ## Metadatos por workspace (`.forge/`)
 

@@ -223,7 +223,10 @@ eventos: una extensión ve el buffer del usuario, no el disco. Incremento 4.2
 añadió los editores encima: `activeTextEditor`, selección con sus eventos y
 `showTextDocument` respetando `preserveFocus`. Incremento 4.3 cerró el bucle
 con `WorkspaceEdit`/`applyEdit`: verificación de versión, todo o nada, y un
-solo paso de undo por refactorización. Diseño y
+solo paso de undo por refactorización. Incremento 4.4 añadió watchers por
+extensión con cleanup demostrado en deactivate/restart/stop/crash, y
+`findFiles` cancelable con `RelativePattern`, exclusiones y límites, por el
+mismo puerto local/SSH. Diseño y
 plan de incrementos 4.0–4.6:
 [extensions-phase4-design.md](./extensions-phase4-design.md) · progreso:
 [extensions-phase4-progress.md](./extensions-phase4-progress.md)
@@ -359,15 +362,18 @@ Criterios de salida:
 ## Primer incremento recomendado
 
 El Milestone 3 está cerrado: los siete incrementos (3.0–3.6) están hechos y
-el gate de seguridad queda cubierto salvo la integración con un
-`utilityProcess` real, que este entorno no puede ejecutar sin display.
+la integración con un `utilityProcess` real fue verificada en Linux el
+2026-10-31: arranque, comandos, watchers y edición de buffers. Las pruebas
+de fallos hostiles siguen usando el transporte simulado; el alcance exacto
+está en [la verificación](./verification-2026-10-31.md).
 
-El próximo cambio de código es el **incremento 4.4**: file watchers y
-`findFiles` con cancelación. El criterio de salida es que un watcher se
-libere al desactivar la extensión, demostrado con una prueba — un watcher
-huérfano es un proceso leyendo disco por una extensión que ya no existe.
+El próximo cambio de código es el **incremento 4.5**: output channels, quick
+pick, input box, progress y clipboard. Una fixture debe publicar salida y
+pedir datos sin bloquear el workbench. El 4.4 ya demuestra la liberación de
+watchers y búsquedas al desactivar y cambiar de generación; sus límites de
+polling y SSH están en el progreso del Milestone 4.
 
 Diseño: [extensions-phase3-design.md](./extensions-phase3-design.md).
 Progreso del kernel: [extensions-phase3-progress.md](./extensions-phase3-progress.md).
-No se carga código de terceros hasta cerrar el resto del gate en
+La política y las pruebas de seguridad se detallan en
 [extensions-security-and-testing.md](./extensions-security-and-testing.md).

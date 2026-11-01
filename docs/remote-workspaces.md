@@ -1,6 +1,6 @@
 # Workspaces remotos (SSH)
 
-Forge abre una carpeta en otro host y la trata como workspace. El
+Forge Code abre una carpeta en otro host y la trata como workspace. El
 modelo es un URI `ssh://`, no un mount FUSE ni un Extension Host
 remoto (eso es Milestone 9).
 
@@ -31,7 +31,7 @@ Ejemplo: `ssh://david@devbox/home/david/proj`.
 | Explorer | El árbol usa las mismas `fs:*`; el URI es el path canónico de tabs y selección |
 
 Hace falta un `ssh` que ya autentique (agente, llave, `~/.ssh/config`).
-Forge no pide contraseña interactiva.
+Forge Code no pide contraseña interactiva.
 
 ## Qué no funciona (y no está escondido en la UI)
 
@@ -42,7 +42,7 @@ Forge no pide contraseña interactiva.
 | Tools del agente nativo | `agent-tools.ts` usa `fs` de Node sobre un path local |
 | Git / SCM | `git.ts` necesita un cwd real |
 | LSP nativo | `typescript-language-server` no ve el árbol remoto |
-| Extension Host remoto | Milestone 9; las extensiones corren (cuando corran) en la máquina de Forge |
+| Extension Host remoto | Milestone 9; las extensiones corren (cuando corran) en la máquina de Forge Code |
 
 Restricted Mode es el default de un workspace remoto. Confiarlo es una
 decisión explícita; hoy no se puede marcar remoto como trusted desde

@@ -31,6 +31,9 @@ import { createExtensionContext, disposeSubscriptions } from './extension-contex
 import type { ExtensionContext, MementoStore } from './extension-context';
 import { createVscodeApi } from './vscode-api/facade';
 import { createFileSystemApi } from './vscode-api/workspace-fs';
+import { HostWorkspaceFiles } from './vscode-api/workspace-files';
+import { resourcePath, resourceUri } from './vscode-api/resource-uri';
+import type { WorkspaceFileEvent } from '../extensions/domain/workspace-glob';
 import { WorkspaceEdit, TextEditorEdit, serializeEdit } from './vscode-api/workspace-edit';
 import { Uri } from './vscode-api/primitives';
 import { DocumentRegistry } from './document-registry';
@@ -97,6 +100,7 @@ export class ExtensionRuntime {
   private readonly loaded = new Map<string, LoadedExtension>();
   private readonly apis = new Map<string, unknown>();
   private readonly commands: HostCommandRegistry;
+  private readonly workspaceFiles = new Map<string, HostWorkspaceFiles>();
   /** Shared: a document is the same object for every extension, exactly as
    *  it is the same file. */
   readonly documents: DocumentRegistry;
@@ -148,6 +152,8 @@ export class ExtensionRuntime {
   /** Publishes the descriptor set of this generation and arms the loader.
    *  Called once, from `lifecycle.initialize`. */
   setExtensions(descriptors: ExtensionHostDescriptor[]): void {
+    for (const files of this.workspaceFiles.values()) void files.dispose();
+    this.workspaceFiles.clear();
     this.uninstallHook?.();
     this.loaded.clear();
     this.apis.clear();
@@ -244,6 +250,7 @@ export class ExtensionRuntime {
         ),
       });
       entry.context = context;
+      this.workspaceFiles.get(descriptor.id)?.resume();
 
       const module = this.options.loadModule(resolution.entryPoint) as LoadedExtension['module'];
       entry.module = module ?? null;
@@ -280,6 +287,7 @@ export class ExtensionRuntime {
       // Commands registered before the throw would otherwise stay visible in
       // the palette, pointing at an extension that never finished loading.
       this.commands.disposeOwner(descriptor.id);
+      await this.disposeWorkspaceFiles(descriptor.id);
       entry.context = null;
       entry.module = null;
       this.options.log('error', `activación fallida: ${entry.error}`, descriptor.id);
@@ -296,6 +304,7 @@ export class ExtensionRuntime {
    */
   async deactivate(id: string): Promise<void> {
     const entry = this.loaded.get(id);
+    if (entry?.pending) await entry.pending.catch(() => undefined);
     if (!entry || entry.status !== 'active') return;
 
     const { module, context } = entry;
@@ -321,6 +330,7 @@ export class ExtensionRuntime {
       // Whatever the extension forgot to dispose goes now: an unregistered
       // command is recoverable, a command whose handler is gone is not.
       this.commands.disposeOwner(id);
+      await this.disposeWorkspaceFiles(id);
     }
   }
 
@@ -329,6 +339,8 @@ export class ExtensionRuntime {
     for (const id of [...this.loaded.keys()]) {
       await this.deactivate(id);
     }
+    for (const id of [...this.workspaceFiles.keys()]) await this.disposeWorkspaceFiles(id);
+    this.workspaceFiles.clear();
     this.uninstallHook?.();
     this.uninstallHook = null;
     this.editors.dispose();
@@ -481,15 +493,25 @@ export class ExtensionRuntime {
    * promise would break them.
    */
   private workspaceApiFor(extensionId: string): Record<string, unknown> {
+    const files = new HostWorkspaceFiles({
+      request: (operation, payload) => {
+        if (!this.options.request) return Promise.reject(new RpcError('HOST_UNAVAILABLE', 'El host no tiene conexión con Forge.'));
+        return this.options.request(`workspace.files.${operation}`, payload, extensionId);
+      },
+      warn: (message) => this.options.log('warn', message, extensionId),
+    });
+    this.workspaceFiles.set(extensionId, files);
     const snapshot = () => this.options.configuration?.() ?? {};
     const registry = this.documents;
     const workspacePath = this.options.workspacePath;
-    const folderUri = workspacePath ? Uri.file(workspacePath) : null;
+    const folderUri = workspacePath ? resourceUri(workspacePath) : null;
     const folders = folderUri
       ? [{ uri: folderUri, name: basenameOf(workspacePath as string), index: 0 }]
       : undefined;
 
     return {
+      createFileSystemWatcher: files.createFileSystemWatcher,
+      findFiles: files.findFiles,
       // Documents are workbench state, shared by every extension; what is
       // per-extension is only the subscription, which its `deactivate`
       // disposes along with the rest of `context.subscriptions`.
@@ -573,7 +595,7 @@ export class ExtensionRuntime {
 
       getWorkspaceFolder: (uri: { fsPath?: string } | string) => {
         if (!folders || !folderUri) return undefined;
-        const target = typeof uri === 'string' ? uri : uri?.fsPath ?? '';
+        const target = typeof uri === 'string' ? uri : uri instanceof Uri ? resourcePath(uri) : uri?.fsPath ?? '';
         return target && isInsidePath(workspacePath as string, target) ? folders[0] : undefined;
       },
 
@@ -581,7 +603,7 @@ export class ExtensionRuntime {
         pathOrUri: { fsPath?: string } | string,
         includeWorkspaceFolder?: boolean,
       ) => {
-        const target = typeof pathOrUri === 'string' ? pathOrUri : pathOrUri?.fsPath ?? '';
+        const target = typeof pathOrUri === 'string' ? pathOrUri : pathOrUri instanceof Uri ? resourcePath(pathOrUri) : pathOrUri?.fsPath ?? '';
         if (!workspacePath || !isInsidePath(workspacePath, target)) return target;
         const relative = target.slice(workspacePath.length).replace(/^[\\/]+/, '');
         return includeWorkspaceFolder
@@ -625,6 +647,16 @@ export class ExtensionRuntime {
         ? Object.keys(entry.exports as object)
         : [],
     };
+  }
+
+  acceptWorkspaceFileEvent(owner: string, event: WorkspaceFileEvent): void {
+    this.workspaceFiles.get(owner)?.accept(event);
+  }
+
+  private async disposeWorkspaceFiles(owner: string): Promise<void> {
+    const files = this.workspaceFiles.get(owner);
+    if (!files) return;
+    await files.dispose();
   }
 }
 

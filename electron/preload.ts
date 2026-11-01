@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import { BufferedStartupEvent } from './buffered-startup-event';
 import type {
   ExtensionConfigurationValuePayload,
   ExtensionListPayload,
@@ -450,6 +451,15 @@ const fsChangedHandlers = new WeakMap<
 >();
 const allFsChangedHandlers = new Set<(_event: unknown, payload: FsChangeEvent) => void>();
 
+// Main can finish loading before React registers its restore effect. Keep
+// this listener alive from preload startup, independently of UI lifetimes.
+const workspaceRestore = new BufferedStartupEvent<string>((error) => {
+  console.error('[forge] onWorkspaceRestore callback error:', error);
+});
+ipcRenderer.on('workspace:restore', (_event, workspacePath: unknown) => {
+  if (typeof workspacePath === 'string' && workspacePath) workspaceRestore.publish(workspacePath);
+});
+
 contextBridge.exposeInMainWorld('electronAPI', {
   // Dialog
   openFolder: () => ipcRenderer.invoke('dialog:openFolder'),
@@ -500,12 +510,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       allFsChangedHandlers.clear();
     }
   },
-  onWorkspaceRestore: (callback: (workspacePath: string) => void) => {
-    const channel = 'workspace:restore';
-    const handler = (_event: unknown, workspacePath: string) => callback(workspacePath);
-    ipcRenderer.on(channel, handler);
-    return { dispose: () => ipcRenderer.removeListener(channel, handler) };
-  },
+  onWorkspaceRestore: (callback: (workspacePath: string) => void) => workspaceRestore.subscribe(callback),
   // Window Controls
   newWindow: () => ipcRenderer.send('window:new'),
   minimize: () => ipcRenderer.send('window:minimize'),

@@ -24,6 +24,7 @@ import {
 } from './primitives';
 import { TextEdit, WorkspaceEdit } from './workspace-edit';
 import { FileSystemError } from './workspace-fs';
+import { RelativePattern } from './workspace-files';
 import { VSCODE_ENUMS } from './enums';
 import { createUnsupportedNamespace } from './unsupported';
 import type { UnsupportedApiReporter } from './unsupported';
@@ -78,6 +79,7 @@ export function createVscodeApi(options: VscodeFacadeOptions): Record<string, un
     TextEdit,
     WorkspaceEdit,
     FileSystemError,
+    RelativePattern,
     CancellationTokenSource,
     CancellationError,
     ...VSCODE_ENUMS,

@@ -1,12 +1,11 @@
 import { useStore } from '../store';
-import { Bell, GitBranch, AlertCircle, CheckCircle2, Globe, Save } from 'lucide-react';
+import { AlertCircle, AlertTriangle, GitBranch, Globe, Save, TerminalSquare } from 'lucide-react';
 
 export default function StatusBar() {
   const cursorPosition = useStore((s) => s.cursorPosition);
   const openTabs = useStore((s) => s.openTabs);
   const activeTabId = useStore((s) => s.activeTabId);
   const workspacePath = useStore((s) => s.workspacePath);
-  const togglePanel = useStore((s) => s.togglePanel);
   const liveServerActive = useStore((s) => s.liveServerActive);
   const liveServerPort = useStore((s) => s.liveServerPort);
   const liveServerUrl = useStore((s) => s.liveServerUrl);
@@ -15,102 +14,29 @@ export default function StatusBar() {
   const gitBranch = useStore((s) => s.gitBranch);
   const gitChanges = useStore((s) => s.gitChanges);
   const setSidebarPanel = useStore((s) => s.setSidebarPanel);
+  const setBottomTab = useStore((s) => s.setBottomTab);
   const problems = useStore((s) => s.problems);
   const autoSave = useStore((s) => s.autoSave);
   const setAutoSave = useStore((s) => s.setAutoSave);
   const tabSize = useStore((s) => s.tabSize);
-
-  const activeTab = openTabs.find((t) => t.id === activeTabId);
-  const languageLabel = activeTab?.language || 'Plain Text';
-  const displayLanguage = languageLabel.charAt(0).toUpperCase() + languageLabel.slice(1);
-
-  const showPort = liveServerActive && liveServerPort != null;
-  const liveServerLabel = showPort ? `Puerto: ${liveServerPort}` : 'Live Server';
-  const liveServerColor = liveServerActive ? '#E52E3D' : '#A1A3AF';
-  const liveServerTitle = liveServerActive
-    ? `Live Server activo en ${liveServerUrl || `http://localhost:${liveServerPort}`} — clic para detener`
-    : 'Live Server inactivo — clic para iniciar (requiere archivo HTML)';
-  const errorCount = problems.filter((p) => p.severity === 1).length;
-  const warningCount = problems.filter((p) => p.severity === 2).length;
+  const activeTab = openTabs.find((tab) => tab.id === activeTabId);
+  const isTextFile = activeTab && !activeTab.extension && !activeTab.imageDataUrl && !activeTab.gitDiff;
+  const errorCount = problems.filter((problem) => problem.severity === 1).length;
+  const warningCount = problems.filter((problem) => problem.severity === 2).length;
+  const buttonClass = 'inline-flex h-full shrink-0 items-center gap-1.5 px-2 hover:bg-white/[0.06] hover:text-forge-text-strong transition-colors';
 
   return (
-    <div
-      className="h-[22px] flex items-center justify-between px-2 text-[12px] select-none"
-      style={{ backgroundColor: '#2F323F', color: '#A1A3AF' }}
-    >
-      {/* Left */}
-      <div className="flex items-center gap-3">
-        {workspacePath && gitIsRepo && (
-          <button
-            onClick={() => setSidebarPanel('git')}
-            title={`${gitChanges.length} Git change${gitChanges.length === 1 ? '' : 's'}`}
-            className="flex items-center gap-1 hover:text-forge-text-strong transition-colors px-1 rounded"
-          >
-            <GitBranch size={12} />
-            <span>{gitBranch || 'HEAD'}</span>
-            {gitChanges.length > 0 && <span className="text-forge-text/60">*{gitChanges.length}</span>}
-          </button>
-        )}
-
-        <button
-          onClick={() => {
-            togglePanel();
-            useStore.getState().setBottomTab('problems');
-          }}
-          className="flex items-center gap-1 hover:text-forge-text-strong px-1 rounded transition-colors"
-        >
-          <AlertCircle size={12} />
-          <span>{errorCount}</span>
-          <CheckCircle2 size={12} className="ml-1" />
-          <span>{warningCount}</span>
-        </button>
-
-        <button
-          onClick={() => toggleLiveServer()}
-          title={liveServerTitle}
-          className="flex items-center gap-1 hover:text-forge-text-strong px-1 rounded transition-colors"
-        >
-          <Globe size={12} style={{ color: liveServerColor }} />
-          <span
-            aria-hidden="true"
-            className="inline-block w-[6px] h-[6px] rounded-full"
-            style={{ backgroundColor: liveServerColor }}
-          />
-          <span style={{ color: liveServerActive ? '#D0D3DA' : '#A1A3AF' }}>
-            {liveServerLabel}
-          </span>
-        </button>
+    <footer aria-label="Estado del editor" className="h-[22px] flex items-center justify-between border-t border-forge-border/70 bg-forge-statusbar text-forge-text-dim text-[10px] select-none overflow-hidden">
+      <div className="flex items-center h-full min-w-0">
+        <button className={`${buttonClass} text-forge-gold`} title="Abrir terminal" aria-label="Abrir terminal" onClick={() => setBottomTab('terminal')}><TerminalSquare size={12} /></button>
+        {workspacePath && gitIsRepo && <button onClick={() => setSidebarPanel('git')} title={`${gitChanges.length} cambios en Git`} className={`${buttonClass} max-w-[180px]`}><GitBranch size={11} /><span className="truncate">{gitBranch || 'HEAD'}</span>{gitChanges.length > 0 && <span className="text-forge-gold">*{gitChanges.length}</span>}</button>}
+        <button onClick={() => setBottomTab('problems')} title={`${errorCount} errores, ${warningCount} advertencias`} aria-label={`Ver problemas: ${errorCount} errores y ${warningCount} advertencias`} className={buttonClass}><AlertCircle size={11} /><span>{errorCount}</span><AlertTriangle size={11} className="ml-1" /><span>{warningCount}</span></button>
+        <button onClick={() => void toggleLiveServer()} title={liveServerActive ? `Detener Live Server · ${liveServerUrl || `http://localhost:${liveServerPort}`}` : 'Iniciar Live Server con un archivo HTML'} className={`${buttonClass} ${liveServerActive ? 'text-forge-gold' : ''}`}><Globe size={11} /><span className="hidden sm:inline">{liveServerActive ? `Puerto ${liveServerPort}` : 'Live Server'}</span></button>
       </div>
-
-      {/* Right */}
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() => setAutoSave(!autoSave)}
-          title={autoSave ? 'Auto Save activo — clic para desactivar' : 'Auto Save inactivo — clic para activar'}
-          className={`flex items-center gap-1 px-1 rounded transition-colors hover:text-forge-text-strong ${
-            autoSave ? 'text-forge-accent' : ''
-          }`}
-        >
-          <Save size={12} />
-          <span>{autoSave ? 'Auto Save' : 'Manual Save'}</span>
-        </button>
-
-        {activeTab && (
-          <>
-            <span>
-              Ln {cursorPosition.line}, Col {cursorPosition.column}
-            </span>
-            <span>Spaces: {tabSize}</span>
-            <span>UTF-8</span>
-            <span>LF</span>
-            <span>{displayLanguage}</span>
-          </>
-        )}
-
-        <button className="flex items-center hover:text-forge-text-strong px-1 rounded transition-colors">
-          <Bell size={12} />
-        </button>
+      <div className="flex items-center h-full min-w-0">
+        <button onClick={() => setAutoSave(!autoSave)} title={autoSave ? 'Desactivar guardado automático' : 'Activar guardado automático'} aria-pressed={autoSave} className={`${buttonClass} ${autoSave ? 'text-forge-gold' : ''}`}><Save size={11} /><span className="hidden md:inline">{autoSave ? 'Autoguardado' : 'Guardado manual'}</span></button>
+        {isTextFile && <><span className="shrink-0 px-2">Ln {cursorPosition.line}, Col {cursorPosition.column}</span><span className="hidden lg:inline px-2">Espacios: {tabSize}</span><span className="hidden lg:inline px-2">UTF-8</span><span className="hidden xl:inline px-2">LF</span><span className="hidden sm:inline px-2 truncate max-w-[110px]">{activeTab.language}</span></>}
       </div>
-    </div>
+    </footer>
   );
 }

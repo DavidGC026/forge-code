@@ -1,3 +1,5 @@
+import { createRemoteFileSystemObserver } from './extensions/infrastructure/remote-file-system-observer';
+import './app-identity';
 import { app, BrowserWindow, ipcMain, dialog, nativeImage, clipboard, screen, shell } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -548,7 +550,7 @@ function createWindow(options: { restoreLastWorkspace?: boolean } = {}) {
     minWidth: 520,
     minHeight: 600,
     frame: false,
-    title: 'Forge',
+    title: 'Forge Code',
     titleBarStyle: 'hidden',
     backgroundColor: '#323643',
     icon,
@@ -2295,22 +2297,7 @@ ipcMain.handle('forge:hasHistory', async (_event, workspacePath: string) => {
 // a crafted path would become code.
 configureExtensionRemoteFileSystem({
   isRemote: (target) => isRemoteWorkspacePath(target),
-  stat: async (target) => {
-    const remote = parseRemoteWorkspaceUri(target);
-    // `%f` is the type (regular file / directory), `%s` size, `%Y` mtime.
-    const out = await runSshCommand(
-      remote.target,
-      `stat -c '%F|%s|%Y' ${shellQuote(remote.path)}`,
-    );
-    const [kind, size, mtime] = out.toString('utf8').trim().split('|');
-    const isDirectory = kind === 'directory';
-    return {
-      type: isDirectory ? 2 : 1,
-      ctime: Number(mtime) * 1000,
-      mtime: Number(mtime) * 1000,
-      size: Number(size) || 0,
-    };
-  },
+  ...createRemoteFileSystemObserver({ parse: parseRemoteWorkspaceUri, run: runSshCommand }),
   readFile: async (target) => {
     const remote = parseRemoteWorkspaceUri(target);
     const out = await runSshCommand(remote.target, `cat ${shellQuote(remote.path)}`);
@@ -2323,20 +2310,6 @@ configureExtensionRemoteFileSystem({
       `cat > ${shellQuote(remote.path)}`,
       Buffer.from(data),
     );
-  },
-  readDirectory: async (target) => {
-    const remote = parseRemoteWorkspaceUri(target);
-    // A trailing `/` on the name marks directories, which is cheaper and
-    // more portable than a second stat per entry.
-    const out = await runSshCommand(
-      remote.target,
-      `ls -Ap ${shellQuote(remote.path)}`,
-    );
-    return out.toString('utf8').split('\n').filter(Boolean).map((name) => (
-      name.endsWith('/')
-        ? { name: name.slice(0, -1), type: 2 }
-        : { name, type: 1 }
-    ));
   },
   createDirectory: async (target) => {
     const remote = parseRemoteWorkspaceUri(target);

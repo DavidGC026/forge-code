@@ -61,18 +61,21 @@ Ya existe y se usa:
   commands/keybindings/menus con `when`.
 - Analyzer con reporte tipado (`none` / `partial` / `full` + blockers).
 - Workspace Trust y Restricted Mode (3.0).
-- Kernel del Extension Host (3.1): `utilityProcess`, envelope RPC,
-  heartbeat, backoff y circuit breaker. **No carga código de extensión.**
+- Extension Host (3.1–3.6): `utilityProcess`, RPC, heartbeat, backoff,
+  loader de `main`, facade `vscode`, contexto, activación, comandos y modo seguro.
+- Workspace, documentos y edición (4.0–4.4): filesystem local/SSH con
+  política de rutas, buffers y editores sincronizados, ediciones con versión,
+  watchers y búsquedas cancelables.
+- Integración Electron real verificada en Linux el 2026-10-31:
+  [evidencia y límites](./verification-2026-10-31.md).
 
-Deuda que sigue bloqueando ejecutar `main` de terceros (gate en
-[extensions-security-and-testing.md](./extensions-security-and-testing.md)):
+Deuda vigente:
 
-- No hay loader, `require('vscode')`, `ExtensionContext` ni activation
-  events despachados (incremento 3.2).
 - `electron/extensions.ts` sigue siendo facade; no debe absorber
   responsabilidades nuevas.
 - El preload de `ext:*` está tipado; otros namespaces (`lsp`, `ai`,
   `claudeIde`) todavía usan `any`.
+- APIs del 4.5/4.6 y milestones posteriores según el roadmap.
 - No hay perfiles, auto-update ni Extension Host web/remoto.
 
 ## 4. Principios SOLID aplicados

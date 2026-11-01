@@ -59,7 +59,11 @@ export function createUnsupportedNamespace(
   /** Members that *are* implemented and shadow the throwing default. */
   implemented: Record<string, unknown> = {},
 ): Record<string, unknown> {
-  const target: Record<string, unknown> = { ...implemented };
+  // Workspace/editor state is exposed through getters. Spreading would
+  // evaluate them at activation and freeze textDocuments/focus forever.
+  const target: Record<string, unknown> = Object.defineProperties(
+    {}, Object.getOwnPropertyDescriptors(implemented),
+  );
 
   return new Proxy(target, {
     get(base, property, receiver) {

@@ -1150,6 +1150,37 @@ test('an extension sees the dirty buffer and the whole document lifecycle', asyn
 
 // ── Editores de punta a punta (incremento 4.2) ──────────────────────────
 
+test('facade getters follow documents and editors opened after extension activation', async () => {
+  const host = createLoadingResponder();
+  const descriptor = hostDescriptor('documents');
+  await host.request('lifecycle.initialize', {
+    protocol: 1, apiVersion: '1.90.0', extensions: [descriptor],
+    workspace: '/w', configuration: {}, documents: [],
+    editors: { editors: [], activeUri: null },
+  });
+  await host.request('lifecycle.activate', { id: descriptor.id });
+  const loaded = require(path.join(HOST_FIXTURES, 'documents', 'out', 'extension.js'));
+  assert.deepEqual(loaded.snapshot(), { documents: [], active: null, visible: [] });
+  await host.request('documents.sync', { kind: 'open', document: {
+    uri: '/w/late.ts', languageId: 'typescript', version: 1,
+    content: 'disk', isDirty: false,
+  } });
+  await host.request('editors.sync', { activeUri: '/w/late.ts', editors: [{
+    uri: '/w/late.ts', viewColumn: 1,
+    selections: [{ anchorLine: 0, anchorCharacter: 0, activeLine: 0, activeCharacter: 0 }],
+  }] });
+  await host.request('documents.sync', { kind: 'change', uri: '/w/late.ts', document: {
+    uri: '/w/late.ts', version: 2, content: 'dirty buffer', isDirty: true,
+  } });
+  assert.deepEqual(loaded.snapshot(), {
+    documents: [{ fileName: '/w/late.ts', content: 'dirty buffer', version: 2 }],
+    active: '/w/late.ts', visible: ['/w/late.ts'],
+  });
+  await host.request('documents.sync', { kind: 'close', uri: '/w/late.ts' });
+  await host.request('editors.sync', { activeUri: null, editors: [] });
+  assert.deepEqual(loaded.snapshot(), { documents: [], active: null, visible: [] });
+});
+
 test('an extension follows the focus and reads the selected text', async () => {
   const host = createLoadingResponder();
   const descriptor = hostDescriptor('editors');

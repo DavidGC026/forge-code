@@ -43,12 +43,12 @@ function joinPath(parent: string, child: string): string {
 function gitStatusTitle(change: GitChange): string {
   const code = gitStatusLabel(change);
   const labels: Record<string, string> = {
-    M: 'Modified',
-    A: 'Added',
-    D: 'Deleted',
-    R: 'Renamed',
-    C: 'Copied',
-    U: 'Untracked',
+    M: 'Modificado',
+    A: 'Agregado',
+    D: 'Eliminado',
+    R: 'Renombrado',
+    C: 'Copiado',
+    U: 'Sin seguimiento',
   };
   return labels[code] || code;
 }
@@ -188,15 +188,15 @@ function ContextMenu({
           <div className="context-menu-divider" />
         </>
       )}
-      <div className="context-menu-item" onClick={() => { onNewFile(); onClose(); }}>New File</div>
-      <div className="context-menu-item" onClick={() => { onNewFolder(); onClose(); }}>New Folder</div>
+      <div className="context-menu-item" onClick={() => { onNewFile(); onClose(); }}>Nuevo archivo</div>
+      <div className="context-menu-item" onClick={() => { onNewFolder(); onClose(); }}>Nueva carpeta</div>
       <div className="context-menu-divider" />
-      <div className="context-menu-item" onClick={() => { onCopyPath(); onClose(); }}>Copy Path</div>
-      <div className="context-menu-item" onClick={() => { onCopyRelativePath(); onClose(); }}>Copy Relative Path</div>
-      <div className="context-menu-item" onClick={() => { onRevealInFolder(); onClose(); }}>Reveal in File Manager</div>
+      <div className="context-menu-item" onClick={() => { onCopyPath(); onClose(); }}>Copiar ruta</div>
+      <div className="context-menu-item" onClick={() => { onCopyRelativePath(); onClose(); }}>Copiar ruta relativa</div>
+      <div className="context-menu-item" onClick={() => { onRevealInFolder(); onClose(); }}>Mostrar en administrador de archivos</div>
       <div className="context-menu-divider" />
-      <div className="context-menu-item" onClick={() => { onRename(); onClose(); }}>Rename</div>
-      <div className="context-menu-item" onClick={() => { onDelete(); onClose(); }}>Delete</div>
+      <div className="context-menu-item" onClick={() => { onRename(); onClose(); }}>Renombrar</div>
+      <div className="context-menu-item" onClick={() => { onDelete(); onClose(); }}>Eliminar</div>
       {extensionItems.length > 0 && (
         <>
           <div className="context-menu-divider" />
@@ -356,7 +356,7 @@ function TreeItem({
             {(hasUnsavedFile || hasNestedUnsavedFile) && (
               <span
                 className="w-1.5 h-1.5 rounded-full bg-forge-text/70"
-                title="Unsaved changes"
+                title="Cambios sin guardar"
               />
             )}
             {gitChange && (
@@ -370,7 +370,7 @@ function TreeItem({
             {!gitChange && hasNestedGitChange && (
               <span
                 className="w-1.5 h-1.5 rounded-full bg-forge-accent/80"
-                title="Folder contains Git changes"
+                title="La carpeta contiene cambios en Git"
               />
             )}
           </span>
@@ -503,7 +503,7 @@ function NewItemInput({
       <input
         ref={ref}
         className="flex-1 bg-forge-input text-forge-text text-[13px] px-1.5 py-0.5 border border-forge-accent outline-none rounded-sm"
-        placeholder={type === 'file' ? 'name.ext' : 'folder name'}
+        placeholder={type === 'file' ? 'nombre.ext' : 'nombre de carpeta'}
         value={val}
         autoFocus
         spellCheck={false}
@@ -643,7 +643,7 @@ function AddDropdown({
         onMouseLeave={() => setHover(null)}
         onClick={() => onPick('file')}
       >
-        New File
+        Nuevo archivo
       </button>
       <button
         className="block w-full text-left px-3 py-1.5 text-[13px] transition-colors"
@@ -652,7 +652,7 @@ function AddDropdown({
         onMouseLeave={() => setHover(null)}
         onClick={() => onPick('folder')}
       >
-        New Folder
+        Nueva carpeta
       </button>
     </div>
   );
@@ -706,7 +706,7 @@ function HeaderContextMenu({
           onClose();
         }}
       >
-        Close Folder
+        Cerrar carpeta
       </div>
     </div>
   );
@@ -849,7 +849,7 @@ export default function ExplorerPanel() {
 
   const handleCtxDelete = useCallback(async () => {
     if (!ctxMenu) return;
-    if (confirm(`Delete "${ctxMenu.node.name}"?`)) {
+    if (confirm(`¿Eliminar "${ctxMenu.node.name}"?`)) {
       await deleteItem(ctxMenu.node.path);
     }
   }, [ctxMenu, deleteItem]);
@@ -878,18 +878,18 @@ export default function ExplorerPanel() {
   if (!workspacePath) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4 text-forge-text">
-        <p className="text-sm text-center">No folder opened</p>
+        <p className="text-sm text-center">No hay una carpeta abierta</p>
         <button
           onClick={() => openFolder()}
           className="px-4 py-1.5 bg-forge-accent text-[#1F2025] text-sm font-semibold rounded hover:opacity-90 transition-opacity"
         >
-          Open Folder
+          Abrir carpeta
         </button>
         <button
           onClick={() => openRemoteWorkspace()}
           className="px-4 py-1.5 border border-forge-border text-forge-text text-sm font-semibold rounded hover:bg-white/5 transition-colors"
         >
-          Open Remote SSH
+          Conectar por SSH
         </button>
       </div>
     );
@@ -914,7 +914,7 @@ export default function ExplorerPanel() {
 
         <button
           onClick={() => setDropdownOpen((v) => !v)}
-          title="New..."
+          title="Nuevo…"
           className="p-1 rounded hover:bg-white/5 transition-colors"
         >
           <Plus size={16} className="text-forge-accent" />
@@ -1100,15 +1100,15 @@ function OutlineSection() {
   };
 
   return (
-    <CollapsibleSection title="Outline" icon={<ListTree size={12} />} defaultOpen>
+    <CollapsibleSection title="Símbolos" icon={<ListTree size={12} />} defaultOpen>
       {!filePath ? (
-        <p className="italic">No active editor file.</p>
+        <p className="italic">No hay un archivo activo.</p>
       ) : busy ? (
         <p className="italic flex items-center gap-1.5">
-          <Loader2 size={12} className="animate-spin" /> Loading symbols…
+          <Loader2 size={12} className="animate-spin" /> Cargando símbolos…
         </p>
       ) : symbols.length === 0 ? (
-        <p className="italic">No symbols found in active editor.</p>
+        <p className="italic">No se encontraron símbolos en el archivo activo.</p>
       ) : (
         <div className="space-y-0.5">
           {symbols.map((sym, i) => (
@@ -1117,7 +1117,7 @@ function OutlineSection() {
               onClick={() => jumpTo(sym.startLine)}
               className="w-full flex items-center gap-1.5 text-left hover:text-forge-accent transition-colors truncate"
               style={{ paddingLeft: `${sym.depth * 10}px` }}
-              title={`${sym.name} · line ${sym.startLine}`}
+              title={`${sym.name} · línea ${sym.startLine}`}
             >
               <span className="text-[9px] uppercase text-forge-text/35 flex-shrink-0 w-8">
                 {symbolKindLabel(sym.kind)}
@@ -1163,7 +1163,7 @@ function TimelineSection() {
       .catch((err) => {
         if (!cancelled) {
           setEntries([]);
-          setError((err as Error).message || 'Could not load history.');
+          setError((err as Error).message || 'No se pudo cargar el historial.');
           setBusy(false);
         }
       });
@@ -1171,19 +1171,19 @@ function TimelineSection() {
   }, [workspacePath, gitIsRepo, relPath]);
 
   return (
-    <CollapsibleSection title="Timeline" icon={<History size={12} />}>
+    <CollapsibleSection title="Historial" icon={<History size={12} />}>
       {!workspacePath || !gitIsRepo ? (
-        <p className="italic">Not a Git repository.</p>
+        <p className="italic">No es un repositorio Git.</p>
       ) : !relPath ? (
-        <p className="italic">Open a file to see its history.</p>
+        <p className="italic">Abre un archivo para ver su historial.</p>
       ) : busy ? (
         <p className="italic flex items-center gap-1.5">
-          <Loader2 size={12} className="animate-spin" /> Loading commits…
+          <Loader2 size={12} className="animate-spin" /> Cargando commits…
         </p>
       ) : error ? (
         <p className="text-red-400/80">{error}</p>
       ) : entries.length === 0 ? (
-        <p className="italic">No commits for this file yet.</p>
+        <p className="italic">Este archivo aún no tiene commits.</p>
       ) : (
         <div className="space-y-1">
           {entries.map((entry) => (

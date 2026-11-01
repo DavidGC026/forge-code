@@ -38,7 +38,7 @@ function postJson(
           Accept: 'application/json',
           'Content-Type': 'application/x-www-form-urlencoded',
           'Content-Length': Buffer.byteLength(body),
-          'User-Agent': 'forge-editor',
+          'User-Agent': 'forge-code',
           ...headers,
         },
       },
@@ -148,7 +148,7 @@ export function fetchGithubLogin(token: string): Promise<string> {
         headers: {
           Accept: 'application/vnd.github+json',
           Authorization: `Bearer ${token}`,
-          'User-Agent': 'forge-editor',
+          'User-Agent': 'forge-code',
         },
       },
       (res) => {

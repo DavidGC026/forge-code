@@ -9,6 +9,7 @@
  * it a plain `Error` breaks that quietly.
  */
 import { Uri } from './primitives';
+import { resourcePath } from './resource-uri';
 
 export type FileSystemErrorCode =
   | 'FileNotFound'
@@ -97,7 +98,7 @@ export function createFileSystemApi(request: FileSystemRequest): Record<string, 
 
   // Only `fsPath` travels: main resolves against the same abstraction the
   // workbench uses, where a remote workspace is a URI string too.
-  const pathOf = (uri: Uri | string): string => (typeof uri === 'string' ? uri : uri.fsPath);
+  const pathOf = (uri: Uri | string): string => (typeof uri === 'string' ? uri : resourcePath(uri));
 
   return {
     async stat(uri: Uri | string) {

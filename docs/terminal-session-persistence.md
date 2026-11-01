@@ -32,7 +32,7 @@ vida del proceso.
 | Mover agentes entre sidebar, panel derecho y panel inferior | Las sesiones continúan ejecutándose |
 | Cerrar una terminal | Se destruye el PTY y se libera su búfer |
 | Reiniciar un agente | Se cierra la sesión anterior y se crea una nueva |
-| Cerrar Forge | Electron termina todos los PTY activos |
+| Cerrar Forge Code | Electron termina todos los PTY activos |
 
 ## Memoria y alcance
 
@@ -41,7 +41,7 @@ salida y elimina primero los bloques completos más antiguos. Esto mantiene
 acotado el consumo de memoria durante sesiones largas y reduce el riesgo de
 fragmentar la salida ANSI almacenada.
 
-La persistencia cubre toda la ejecución actual de Forge. Recuperar un proceso
+La persistencia cubre toda la ejecución actual de Forge Code. Recuperar un proceso
 interactivo después de cerrar y volver a abrir la aplicación requeriría un
 multiplexor externo (por ejemplo `tmux`) o un daemon de terminal independiente y
 no forma parte de este cambio.
